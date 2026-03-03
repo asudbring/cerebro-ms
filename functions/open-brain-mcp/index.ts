@@ -12,9 +12,9 @@
  */
 
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
-import { generateEmbedding, extractMetadata } from "../../lib/azure-openai.js";
-import { searchThoughts, getRecentThoughts, getStats, insertThought } from "../../lib/database.js";
-import type { SearchResult, ThoughtRow, BrainStats } from "../../lib/types.js";
+import { generateEmbedding, extractMetadata } from "../lib/azure-openai.js";
+import { searchThoughts, getRecentThoughts, getStats, insertThought } from "../lib/database.js";
+import type { SearchResult, ThoughtRow, BrainStats } from "../lib/types.js";
 
 /**
  * Validate the access key from header or query parameter.
@@ -123,8 +123,8 @@ async function handleMcpRequest(
                 query: { type: "string", description: "What to search for (natural language)" },
                 threshold: {
                   type: "number",
-                  description: "Minimum similarity score 0.0-1.0 (default: 0.5)",
-                  default: 0.5,
+                  description: "Minimum similarity score 0.0-1.0 (default: 0.3)",
+                  default: 0.3,
                 },
                 limit: {
                   type: "number",
@@ -179,7 +179,7 @@ async function handleMcpRequest(
       switch (toolName) {
         case "search_thoughts": {
           const query = args.query as string;
-          const threshold = (args.threshold as number) || 0.5;
+          const threshold = (args.threshold as number) || 0.3;
           const limit = (args.limit as number) || 10;
 
           const embedding = await generateEmbedding(query);

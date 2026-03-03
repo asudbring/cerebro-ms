@@ -10,13 +10,11 @@ CREATE TABLE IF NOT EXISTS thoughts (
     updated_at  TIMESTAMPTZ DEFAULT now()
 );
 
--- Index for fast vector similarity search (IVFFlat).
--- Tune the lists parameter based on row count: sqrt(num_rows) is a good starting point.
--- For < 10,000 rows, 100 lists is fine. Rebuild if your data grows significantly.
+-- Index for fast vector similarity search (HNSW).
+-- HNSW works well from zero rows onward — no need to rebuild after loading data.
 CREATE INDEX IF NOT EXISTS thoughts_embedding_idx
     ON thoughts
-    USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 100);
+    USING hnsw (embedding vector_cosine_ops);
 
 -- Index for browsing recent thoughts efficiently.
 CREATE INDEX IF NOT EXISTS thoughts_created_at_idx

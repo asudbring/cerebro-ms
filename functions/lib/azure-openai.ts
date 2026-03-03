@@ -6,7 +6,7 @@
  * AZURE_OPENAI_EMBEDDING_DEPLOYMENT, AZURE_OPENAI_CHAT_DEPLOYMENT.
  */
 
-import { AzureOpenAI } from "@azure/openai";
+import { AzureOpenAI } from "openai";
 import type { ThoughtMetadata } from "./types.js";
 
 let client: AzureOpenAI | null = null;

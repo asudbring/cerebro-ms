@@ -10,9 +10,9 @@
 
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import * as crypto from "crypto";
-import { generateEmbedding, extractMetadata } from "../../lib/azure-openai.js";
-import { insertThought } from "../../lib/database.js";
-import type { TeamsWebhookPayload } from "../../lib/types.js";
+import { generateEmbedding, extractMetadata } from "../lib/azure-openai.js";
+import { insertThought } from "../lib/database.js";
+import type { TeamsWebhookPayload } from "../lib/types.js";
 
 /**
  * Validate the HMAC-SHA256 signature from Teams Outgoing Webhook.

@@ -2,6 +2,7 @@
   "name": "open-brain-functions",
   "version": "1.0.0",
   "private": true,
+  "main": "dist/app.js",
   "description": "Azure Functions for Open Brain — ingest thoughts and serve MCP",
   "scripts": {
     "build": "tsc",
@@ -11,9 +12,10 @@
   },
   "dependencies": {
     "@azure/functions": "^4.5.0",
-    "@azure/openai": "^2.1.0",
+    "@azure/openai": "2.0.0",
     "@modelcontextprotocol/sdk": "^1.24.0",
     "hono": "^4.9.0",
+    "openai": "^6.25.0",
     "pg": "^8.13.0",
     "zod": "^3.24.0"
   },
