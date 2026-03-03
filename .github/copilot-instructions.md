@@ -35,3 +35,4 @@ func azure functionapp publish open-brain-functions  # deploy to Azure
 - **The vector dimension is 1536** (text-embedding-3-small). If you swap embedding models, update the dimension in `02-create-thoughts-table.sql`, `03-create-search-function.sql`, and the IVFFlat index.
 - **SQL scripts in `infra/database/` are numbered and run sequentially** (01 through 04). They're idempotent (`IF NOT EXISTS` / `CREATE OR REPLACE`).
 - **Environment variables** are documented in `.env.example`. Azure OpenAI uses deployment names (not model names).
+- **Companion prompts in `prompts/` are numbered 01–05** and designed to be used in order. Prompts 1, 2, and 5 require the MCP server to be connected (they use `capture_thought`, `search_thoughts`, `browse_recent`). Prompt 4 is a reference doc, not an AI prompt.

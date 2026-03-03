@@ -403,6 +403,20 @@ claude mcp add --transport http open-brain \
 
 ---
 
+## What's Next: Companion Prompts
+
+Your Open Brain is live. Now make it work for you. The [companion prompts](prompts/) cover the full lifecycle:
+
+1. **[Memory Migration](prompts/01-memory-migration.md)** — Extract everything Claude/ChatGPT already knows about you into your brain
+2. **[Second Brain Migration](prompts/02-second-brain-migration.md)** — Bring over your existing notes from Microsoft Lists, Notion, Obsidian, or any other system
+3. **[Open Brain Spark](prompts/03-open-brain-spark.md)** — Discover capture patterns specific to your workflow
+4. **[Quick Capture Templates](prompts/04-quick-capture-templates.md)** — Five patterns optimized for clean metadata extraction
+5. **[Weekly Review](prompts/05-weekly-review.md)** — Friday ritual that surfaces themes, forgotten action items, and connections
+
+**Start with Memory Migration**, then run Second Brain Migration if you have existing notes. The Spark shows you what to capture going forward. The templates build the daily habit. The weekly review closes the loop.
+
+---
+
 ## Troubleshooting
 
 See [docs/troubleshooting.md](docs/troubleshooting.md) for common issues and fixes.
