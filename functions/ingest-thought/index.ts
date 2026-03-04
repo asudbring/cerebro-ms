@@ -1,53 +1,30 @@
 /**
  * ingest-thought — Azure Function
  *
- * Receives a Teams Outgoing Webhook POST, generates an embedding,
- * extracts metadata, stores in PostgreSQL, and returns a reply card.
+ * Receives a thought via HTTP POST, generates an embedding,
+ * extracts metadata, stores in PostgreSQL, and returns a reply.
  *
- * Teams Outgoing Webhooks are synchronous: the JSON you return is
- * displayed as the bot's reply. No separate API call needed.
+ * Called by Power Automate when a keyword is detected in Teams.
+ * Also callable directly via API key for testing.
+ *
+ * Accepts two formats:
+ *   1. Power Automate: { "text": "...", "from": "Person Name" }
+ *   2. Legacy Teams webhook: { "text": "<at>Brain</at> ...", "from": { "name": "..." } }
  */
 
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
-import * as crypto from "crypto";
 import { generateEmbedding, extractMetadata } from "../lib/azure-openai.js";
 import { insertThought } from "../lib/database.js";
-import type { TeamsWebhookPayload } from "../lib/types.js";
 
 /**
- * Validate the HMAC-SHA256 signature from Teams Outgoing Webhook.
- * Teams sends the signature as base64 in the Authorization header.
- */
-function validateTeamsSignature(body: string, authHeader: string | null, secret: string): boolean {
-  if (!authHeader) return false;
-
-  // Teams sends: "HMAC <base64-signature>"
-  const parts = authHeader.split(" ");
-  if (parts.length !== 2 || parts[0] !== "HMAC") return false;
-
-  const providedSignature = parts[1];
-  const bufSecret = Buffer.from(secret, "base64");
-  const computedSignature = crypto
-    .createHmac("sha256", bufSecret)
-    .update(body, "utf8")
-    .digest("base64");
-
-  return crypto.timingSafeEqual(
-    Buffer.from(providedSignature, "base64"),
-    Buffer.from(computedSignature, "base64")
-  );
-}
-
-/**
- * Strip the @mention of the bot from the message text.
- * Teams includes <at>BotName</at> in the text for outgoing webhooks.
+ * Strip any @mention XML tags from the message text.
  */
 function stripBotMention(text: string): string {
   return text.replace(/<at>.*?<\/at>\s*/gi, "").trim();
 }
 
 /**
- * Format the captured metadata into a Teams reply string.
+ * Format the captured metadata into a reply string.
  */
 function formatReply(metadata: Record<string, unknown>): string {
   const parts: string[] = [];
@@ -74,37 +51,48 @@ function formatReply(metadata: Record<string, unknown>): string {
   return parts.join("\n\n");
 }
 
-async function ingestThought(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-  const bodyText = await req.text();
+/**
+ * Validate access via API key (header or query param).
+ */
+function validateAccess(req: HttpRequest): boolean {
+  const expected = process.env.INGEST_API_KEY || process.env.MCP_ACCESS_KEY;
+  if (!expected) return true; // no key configured = open
 
-  // Validate HMAC signature
-  const secret = process.env.TEAMS_WEBHOOK_SECRET;
-  if (secret) {
-    const authHeader = req.headers.get("authorization");
-    if (!validateTeamsSignature(bodyText, authHeader, secret)) {
-      context.log("Invalid HMAC signature — rejecting request.");
-      return { status: 401, body: "Unauthorized" };
-    }
+  const fromHeader = req.headers.get("x-brain-key");
+  const fromQuery = req.query.get("key");
+  return fromHeader === expected || fromQuery === expected;
+}
+
+async function ingestThought(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+  // Validate access
+  if (!validateAccess(req)) {
+    return { status: 401, body: "Unauthorized" };
   }
 
-  let payload: TeamsWebhookPayload;
+  let body: Record<string, unknown>;
   try {
-    payload = JSON.parse(bodyText) as TeamsWebhookPayload;
+    body = await req.json() as Record<string, unknown>;
   } catch {
     return { status: 400, body: "Invalid JSON" };
   }
 
-  const rawText = payload.text;
+  // Extract text — support both { text } and legacy Teams { text with <at> }
+  let rawText = (body.text as string) || "";
   if (!rawText) {
-    return { status: 200, jsonBody: { type: "message", text: "No text found in message." } };
+    return { status: 400, jsonBody: { error: "text is required" } };
   }
 
   const cleanText = stripBotMention(rawText);
   if (!cleanText) {
-    return { status: 200, jsonBody: { type: "message", text: "Empty message after removing mention." } };
+    return { status: 400, jsonBody: { error: "Empty message after processing" } };
   }
 
-  context.log(`Processing thought from ${payload.from?.name}: "${cleanText.substring(0, 80)}..."`);
+  // Extract sender name
+  const from = typeof body.from === "string"
+    ? body.from
+    : (body.from as Record<string, unknown>)?.name as string || "Unknown";
+
+  context.log(`Processing thought from ${from}: "${cleanText.substring(0, 80)}..."`);
 
   try {
     // Generate embedding and extract metadata in parallel
@@ -118,21 +106,25 @@ async function ingestThought(req: HttpRequest, context: InvocationContext): Prom
 
     context.log(`Stored thought ${thought.id} as ${metadata.type}`);
 
-    // Return reply for Teams to display
+    const reply = formatReply(metadata as Record<string, unknown>);
+
+    // Return structured JSON that Power Automate can parse
     return {
       status: 200,
       jsonBody: {
-        type: "message",
-        text: formatReply(metadata as Record<string, unknown>),
+        id: thought.id,
+        reply: reply,
+        type: metadata.type,
+        title: metadata.title,
       },
     };
   } catch (error) {
     context.error("Failed to process thought:", error);
     return {
-      status: 200,
+      status: 500,
       jsonBody: {
-        type: "message",
-        text: "⚠️ Something went wrong capturing that thought. Check the function logs.",
+        error: "Failed to capture thought",
+        reply: "⚠️ Something went wrong capturing that thought.",
       },
     };
   }

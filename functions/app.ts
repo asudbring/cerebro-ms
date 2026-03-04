@@ -4,3 +4,4 @@
  */
 import "./ingest-thought/index.js";
 import "./open-brain-mcp/index.js";
+import "./digest/index.js";

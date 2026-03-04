@@ -90,6 +90,21 @@ export async function getRecentThoughts(
 }
 
 /**
+ * Get thoughts captured since a given date.
+ */
+export async function getThoughtsSince(since: Date): Promise<ThoughtRow[]> {
+  const db = getPool();
+  const result = await db.query<ThoughtRow>(
+    `SELECT id, content, metadata, created_at, updated_at
+     FROM thoughts
+     WHERE created_at >= $1
+     ORDER BY created_at ASC`,
+    [since.toISOString()]
+  );
+  return result.rows;
+}
+
+/**
  * Get brain stats overview.
  */
 export async function getStats(): Promise<BrainStats> {
