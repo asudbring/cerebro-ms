@@ -11,7 +11,7 @@
 
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { AzureOpenAI } from "openai";
-import { getThoughtsSince, getStats } from "../lib/database.js";
+import { getThoughtsSince, getCompletedThoughtsSince, getStats } from "../lib/database.js";
 import type { ThoughtRow } from "../lib/types.js";
 
 // ── Azure OpenAI client ──────────────────────────────────────────────
@@ -127,6 +127,28 @@ function markdownToHtml(md: string): string {
     .replace(/\n/g, "<br>");
 }
 
+function formatCompletedMarkdown(completed: ThoughtRow[]): string {
+  if (completed.length === 0) return "";
+  const items = completed
+    .map((t) => {
+      const title = t.metadata?.title || "Untitled";
+      return `- ✅ ~~${title}~~`;
+    })
+    .join("\n");
+  return `\n\n**Completed:**\n${items}`;
+}
+
+function formatCompletedHtml(completed: ThoughtRow[]): string {
+  if (completed.length === 0) return "";
+  const items = completed
+    .map((t) => {
+      const title = t.metadata?.title || "Untitled";
+      return `<li>✅ <s>${title}</s></li>`;
+    })
+    .join("");
+  return `<h3>Completed</h3><ul>${items}</ul>`;
+}
+
 // ── Daily Digest ─────────────────────────────────────────────────────
 
 async function dailyDigest(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
@@ -139,19 +161,31 @@ async function dailyDigest(req: HttpRequest, context: InvocationContext): Promis
   const since = new Date();
   since.setHours(since.getHours() - 24);
 
-  const thoughts = await getThoughtsSince(since);
+  const [thoughts, completed] = await Promise.all([
+    getThoughtsSince(since),
+    getCompletedThoughtsSince(since, 3),
+  ]);
 
-  if (thoughts.length === 0) {
+  if (thoughts.length === 0 && completed.length === 0) {
     return {
       status: 200,
       jsonBody: { skipped: true, reason: "No thoughts captured in the last 24 hours." },
     };
   }
 
-  const summary = await generateDigestSummary(thoughts, "daily");
+  // Filter out completion-type thoughts from the main list for cleaner summaries
+  const activeThoughts = thoughts.filter((t) => t.status !== "done" && !t.metadata?.is_completion);
+
+  let summary = "";
+  if (activeThoughts.length > 0) {
+    summary = await generateDigestSummary(activeThoughts, "daily");
+  }
+
   const title = `🧠 Daily Brain Digest — ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}`;
-  const bodyMarkdown = `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** captured today\n\n${summary}\n\n---\n${formatThoughtList(thoughts)}`;
-  const bodyHtml = `<h2>${title}</h2><p><strong>${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}</strong> captured today</p>${markdownToHtml(summary)}<hr>${formatThoughtListHtml(thoughts)}`;
+  const completedMd = formatCompletedMarkdown(completed);
+  const completedHtml = formatCompletedHtml(completed);
+  const bodyMarkdown = `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** captured today${completedMd}\n\n${summary}\n\n---\n${formatThoughtList(activeThoughts)}`;
+  const bodyHtml = `<h2>${title}</h2><p><strong>${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}</strong> captured today</p>${completedHtml}${summary ? markdownToHtml(summary) : ""}<hr>${formatThoughtListHtml(activeThoughts)}`;
 
   return {
     status: 200,
@@ -183,28 +217,37 @@ async function weeklyDigest(req: HttpRequest, context: InvocationContext): Promi
   const since = new Date();
   since.setDate(since.getDate() - 7);
 
-  const [thoughts, stats] = await Promise.all([
+  const [thoughts, completed, stats] = await Promise.all([
     getThoughtsSince(since),
+    getCompletedThoughtsSince(since, 5),
     getStats(),
   ]);
 
-  if (thoughts.length === 0) {
+  if (thoughts.length === 0 && completed.length === 0) {
     return {
       status: 200,
       jsonBody: { skipped: true, reason: "No thoughts captured this week." },
     };
   }
 
-  const summary = await generateDigestSummary(thoughts, "weekly");
+  const activeThoughts = thoughts.filter((t) => t.status !== "done" && !t.metadata?.is_completion);
+
+  let summary = "";
+  if (activeThoughts.length > 0) {
+    summary = await generateDigestSummary(activeThoughts, "weekly");
+  }
+
   const title = `🧠 Weekly Brain Review — Week of ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
-  const grouped = groupByType(thoughts);
+  const grouped = groupByType(activeThoughts);
   const typeSummary = Array.from(grouped.entries())
     .map(([type, items]) => `${type}: ${items.length}`)
     .join(", ");
 
-  const bodyMarkdown = `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** this week (${typeSummary})\n**${stats.total_thoughts} total** in your brain\n\n${summary}`;
-  const bodyHtml = `<h2>${title}</h2><p><strong>${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}</strong> this week (${typeSummary})<br><strong>${stats.total_thoughts} total</strong> in your brain</p>${markdownToHtml(summary)}`;
+  const completedMd = formatCompletedMarkdown(completed);
+  const completedHtml = formatCompletedHtml(completed);
+  const bodyMarkdown = `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** this week (${typeSummary})\n**${stats.total_thoughts} total** in your brain${completedMd}\n\n${summary}`;
+  const bodyHtml = `<h2>${title}</h2><p><strong>${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}</strong> this week (${typeSummary})<br><strong>${stats.total_thoughts} total</strong> in your brain</p>${completedHtml}${summary ? markdownToHtml(summary) : ""}`;
 
   return {
     status: 200,

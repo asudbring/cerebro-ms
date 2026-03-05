@@ -36,7 +36,7 @@ export async function insertThought(
   const result = await db.query<ThoughtRow>(
     `INSERT INTO thoughts (content, embedding, metadata)
      VALUES ($1, $2::vector, $3)
-     RETURNING id, content, metadata, created_at, updated_at`,
+     RETURNING id, content, metadata, status, created_at, updated_at`,
     [content, JSON.stringify(embedding), { ...metadata, source }]
   );
   return result.rows[0];
@@ -69,7 +69,7 @@ export async function getRecentThoughts(
 
   if (typeFilter) {
     const result = await db.query<ThoughtRow>(
-      `SELECT id, content, metadata, created_at, updated_at
+      `SELECT id, content, metadata, status, created_at, updated_at
        FROM thoughts
        WHERE metadata->>'type' = $1
        ORDER BY created_at DESC
@@ -80,7 +80,7 @@ export async function getRecentThoughts(
   }
 
   const result = await db.query<ThoughtRow>(
-    `SELECT id, content, metadata, created_at, updated_at
+    `SELECT id, content, metadata, status, created_at, updated_at
      FROM thoughts
      ORDER BY created_at DESC
      LIMIT $1`,
@@ -95,11 +95,66 @@ export async function getRecentThoughts(
 export async function getThoughtsSince(since: Date): Promise<ThoughtRow[]> {
   const db = getPool();
   const result = await db.query<ThoughtRow>(
-    `SELECT id, content, metadata, created_at, updated_at
+    `SELECT id, content, metadata, status, created_at, updated_at
      FROM thoughts
      WHERE created_at >= $1
      ORDER BY created_at ASC`,
     [since.toISOString()]
+  );
+  return result.rows;
+}
+
+/**
+ * Mark a thought as done by ID.
+ */
+export async function markThoughtDone(id: string): Promise<ThoughtRow | null> {
+  const db = getPool();
+  const result = await db.query<ThoughtRow>(
+    `UPDATE thoughts SET status = 'done', updated_at = NOW()
+     WHERE id = $1
+     RETURNING id, content, metadata, status, created_at, updated_at`,
+    [id]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Search for open task-type thoughts by semantic similarity.
+ */
+export async function searchOpenTasks(
+  queryEmbedding: number[],
+  limit: number = 5
+): Promise<SearchResult[]> {
+  const db = getPool();
+  const result = await db.query<SearchResult>(
+    `SELECT id, content, metadata, created_at,
+            1 - (embedding <=> $1::vector) AS similarity
+     FROM thoughts
+     WHERE status = 'open'
+       AND metadata->>'type' = 'task'
+     ORDER BY embedding <=> $1::vector
+     LIMIT $2`,
+    [JSON.stringify(queryEmbedding), limit]
+  );
+  return result.rows;
+}
+
+/**
+ * Get recently completed thoughts within a time range, limited.
+ */
+export async function getCompletedThoughtsSince(
+  since: Date,
+  limit: number = 5
+): Promise<ThoughtRow[]> {
+  const db = getPool();
+  const result = await db.query<ThoughtRow>(
+    `SELECT id, content, metadata, status, created_at, updated_at
+     FROM thoughts
+     WHERE status = 'done'
+       AND updated_at >= $1
+     ORDER BY updated_at DESC
+     LIMIT $2`,
+    [since.toISOString(), limit]
   );
   return result.rows;
 }

@@ -14,7 +14,22 @@
 
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { generateEmbedding, extractMetadata } from "../lib/azure-openai.js";
-import { insertThought } from "../lib/database.js";
+import { insertThought, searchOpenTasks, markThoughtDone } from "../lib/database.js";
+
+/**
+ * Check if text starts with a completion keyword prefix.
+ * Returns the description portion if matched, or null.
+ */
+function extractCompletionPrefix(text: string): string | null {
+  const prefixes = ["done:", "completed:", "finished:", "shipped:", "closed:"];
+  const lower = text.toLowerCase();
+  for (const prefix of prefixes) {
+    if (lower.startsWith(prefix)) {
+      return text.slice(prefix.length).trim();
+    }
+  }
+  return null;
+}
 
 /**
  * Strip any @mention XML tags from the message text.
@@ -71,15 +86,24 @@ async function ingestThought(req: HttpRequest, context: InvocationContext): Prom
 
   let body: Record<string, unknown>;
   try {
-    body = await req.json() as Record<string, unknown>;
-  } catch {
-    return { status: 400, body: "Invalid JSON" };
+    // Try parsing as JSON first, fall back to reading text and parsing
+    try {
+      body = await req.json() as Record<string, unknown>;
+    } catch {
+      const text = await req.text();
+      body = JSON.parse(text) as Record<string, unknown>;
+    }
+  } catch (e) {
+    context.error("Failed to parse request body:", e);
+    return { status: 400, jsonBody: { error: "Invalid JSON", detail: String(e) } };
   }
 
-  // Extract text — support both { text } and legacy Teams { text with <at> }
-  let rawText = (body.text as string) || "";
+  context.log("Received body:", JSON.stringify(body).substring(0, 500));
+
+  // Extract text — support multiple field names PA might send
+  let rawText = (body.text as string) || (body.message as string) || (body.content as string) || "";
   if (!rawText) {
-    return { status: 400, jsonBody: { error: "text is required" } };
+    return { status: 400, jsonBody: { error: "text is required", receivedKeys: Object.keys(body) } };
   }
 
   const cleanText = stripBotMention(rawText);
@@ -101,12 +125,40 @@ async function ingestThought(req: HttpRequest, context: InvocationContext): Prom
       extractMetadata(cleanText),
     ]);
 
-    // Store in database
+    // Check for completion intent — keyword prefix OR AI-detected
+    const prefixMatch = extractCompletionPrefix(cleanText);
+    const isCompletion = !!prefixMatch || metadata.is_completion === true;
+    const completionDesc = prefixMatch || (metadata.completion_description as string) || cleanText;
+
+    let markedDoneThought = null;
+
+    if (isCompletion) {
+      // Generate embedding for just the completion description for better matching
+      const searchEmbedding = prefixMatch
+        ? await generateEmbedding(prefixMatch)
+        : embedding;
+
+      // Find the closest matching open task
+      const matches = await searchOpenTasks(searchEmbedding, 1);
+      if (matches.length > 0 && matches[0].similarity > 0.3) {
+        markedDoneThought = await markThoughtDone(matches[0].id);
+        context.log(`Marked task ${matches[0].id} as done: "${matches[0].content.substring(0, 80)}"`);
+      }
+    }
+
+    // Store the thought itself
     const thought = await insertThought(cleanText, embedding, metadata, "teams");
 
     context.log(`Stored thought ${thought.id} as ${metadata.type}`);
 
-    const reply = formatReply(metadata as Record<string, unknown>);
+    let reply = formatReply(metadata as Record<string, unknown>);
+
+    if (markedDoneThought) {
+      const doneTitle = markedDoneThought.metadata?.title || markedDoneThought.content.substring(0, 60);
+      reply = `✅ **Marked done:** ${doneTitle}\n\n${reply}`;
+    } else if (isCompletion) {
+      reply = `✅ Noted as completed (no matching open task found to mark done)\n\n${reply}`;
+    }
 
     // Return structured JSON that Power Automate can parse
     return {
@@ -116,6 +168,7 @@ async function ingestThought(req: HttpRequest, context: InvocationContext): Prom
         reply: reply,
         type: metadata.type,
         title: metadata.title,
+        markedDone: markedDoneThought ? markedDoneThought.id : null,
       },
     };
   } catch (error) {

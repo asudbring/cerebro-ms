@@ -6,6 +6,7 @@ export interface ThoughtRow {
   content: string;
   embedding?: number[];
   metadata: ThoughtMetadata;
+  status: string;
   created_at: string;
   updated_at: string;
 }

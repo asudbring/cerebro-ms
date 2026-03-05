@@ -41,7 +41,9 @@ const METADATA_SYSTEM_PROMPT = `You are a metadata extractor for a personal know
   "type": "One of: person_note, project_update, idea, task, meeting_note, decision, reflection, reference, other",
   "people": ["Array of people names mentioned, or empty array"],
   "action_items": ["Array of action items found, or empty array"],
-  "tags": ["2-4 relevant topic tags, lowercase"]
+  "tags": ["2-4 relevant topic tags, lowercase"],
+  "is_completion": false,
+  "completion_description": ""
 }
 
 Rules:
@@ -49,7 +51,9 @@ Rules:
 2. Be specific with titles — they should distinguish this thought from others.
 3. Extract ALL people mentioned by name.
 4. Only include action_items if there's a clear to-do or follow-up.
-5. Tags should be topical, not generic (e.g., "api-redesign" not "work").`;
+5. Tags should be topical, not generic (e.g., "api-redesign" not "work").
+6. Set is_completion to true if the thought reports finishing/completing a previous task. Keywords include: "done", "completed", "finished", "shipped", "wrapped up", "closed out", "checked off". Both explicit ("done: vnet docs") and natural ("finally finished the vnet troubleshooting docs") count.
+7. When is_completion is true, set completion_description to a short phrase describing WHAT was completed (without the "done"/"completed" prefix).`;
 
 /**
  * Extract structured metadata from a raw thought using the chat model.
