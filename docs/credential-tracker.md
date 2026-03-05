@@ -24,14 +24,13 @@ CHAT_DEPLOYMENT=gpt-4o-mini
 # --- Azure Functions (Step 3) ---
 FUNCTION_APP_NAME=                 # e.g., open-brain-functions
 INGEST_FUNCTION_URL=               # e.g., https://open-brain-functions.azurewebsites.net/api/ingest-thought
+DAILY_DIGEST_URL=                  # e.g., https://open-brain-functions.azurewebsites.net/api/daily-digest
+WEEKLY_DIGEST_URL=                 # e.g., https://open-brain-functions.azurewebsites.net/api/weekly-digest
 
-# --- Teams Outgoing Webhook (Step 4) ---
-TEAMS_WEBHOOK_SECRET=              # the security token Teams gives you when creating the webhook
-
-# --- MCP Access Key (Step 6) ---
+# --- MCP Access Key (Step 5) ---
 MCP_ACCESS_KEY=                    # 64-character hex string from openssl rand -hex 32
 
-# --- MCP Connection URL (Step 7) ---
+# --- MCP Connection URL (Step 6) ---
 MCP_SERVER_URL=                    # https://FUNCTION_APP.azurewebsites.net/api/open-brain-mcp
 MCP_CONNECTION_URL=                # MCP_SERVER_URL + ?key=MCP_ACCESS_KEY
 ```

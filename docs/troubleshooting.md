@@ -2,24 +2,23 @@
 
 ## Capture Issues (Part 1)
 
-### Teams says the webhook failed or timed out
+### Power Automate flow fails on the HTTP action
 
-The Azure Function may not be deployed or may be cold-starting. Azure Functions on the Consumption plan can take 10-20 seconds on first invocation after idle. Try sending another message — the second attempt should be faster.
+Most common cause: the Azure Function is cold-starting or the request body is malformed. Check the flow run history in Power Automate for the exact error.
 
-If it consistently fails:
-```bash
-# Check if the function is deployed
-func azure functionapp list-functions open-brain-functions
+If the HTTP action returns a 400:
+- Verify the body expressions use `first()` — the "Get message details" output is an **array**
+- Check that `plainTextContent` path is correct: `first(outputs('Get_message_details'))?['body']?['body']?['plainTextContent']`
+- Look at the Compose action output to see the raw structure
 
-# Check the function logs
-az functionapp log tail --name open-brain-functions --resource-group open-brain-rg
-```
+If the HTTP action returns a 401:
+- Verify the `?key=` parameter in the URI matches the `MCP_ACCESS_KEY` app setting
 
-### Messages aren't being captured (no reply, no database row)
+### Messages aren't being captured (no reply in Teams)
 
-1. **Verify the webhook URL** matches your function URL exactly
-2. **Check the HMAC secret** — if `TEAMS_WEBHOOK_SECRET` doesn't match the token Teams generated, requests get rejected with 401
-3. **Check function logs** for errors:
+1. **Check flow trigger:** Make sure the keyword (`brain`, `remember`) is in the message
+2. **Check flow run history** at [make.powerautomate.com](https://make.powerautomate.com) — look for failed runs
+3. **Check function logs:**
    ```bash
    az functionapp log tail --name open-brain-functions --resource-group open-brain-rg
    ```
@@ -46,9 +45,29 @@ Most likely the `DATABASE_URL` is wrong or the PostgreSQL firewall is blocking t
 
 That's normal. The LLM is making its best guess with limited context. The metadata is a convenience layer — the embedding handles semantic search regardless of how metadata gets classified.
 
-### Duplicate captures
+### Task completion didn't match the right task
 
-If the Azure Function takes longer than Teams' timeout (currently ~10 seconds), Teams may retry the webhook. The captures are identical, so it doesn't affect search. You can delete duplicates in the database if it bothers you.
+The completion matching uses semantic similarity with a threshold of 0.3. If the description in your `done:` message is too vague, it may match the wrong task or fail to match at all. Be specific:
+- ✅ `brain done: vnet troubleshooting documentation`
+- ❌ `brain done: the docs`
+
+### Reopen didn't find the task
+
+Same as above — be specific in your description. The reopen search only looks at tasks with status `done`. If the task was never marked as done, reopen won't find it.
+
+## Digest Issues
+
+### Daily/weekly digest returns "skipped"
+
+This means no thoughts were captured in the time period. The digest skips if there's nothing to summarize. Check your capture flow is working.
+
+### Digest email has raw HTML tags
+
+In the Power Automate "Send an email" action, click **Show advanced options** and toggle **Is HTML** to Yes. If the toggle isn't visible, the `summaryHtml` content should still render in most email clients since it contains HTML tags.
+
+### Digest flow fails on the HTTP action
+
+Verify the digest URL includes the access key: `?key=YOUR-ACCESS-KEY`. The digest endpoints use the same `MCP_ACCESS_KEY` authentication.
 
 ## Retrieval Issues (Part 2)
 
