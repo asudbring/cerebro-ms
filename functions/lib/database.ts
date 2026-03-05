@@ -119,6 +119,41 @@ export async function markThoughtDone(id: string): Promise<ThoughtRow | null> {
 }
 
 /**
+ * Reopen a done thought by ID.
+ */
+export async function reopenThought(id: string): Promise<ThoughtRow | null> {
+  const db = getPool();
+  const result = await db.query<ThoughtRow>(
+    `UPDATE thoughts SET status = 'open', updated_at = NOW()
+     WHERE id = $1 AND status = 'done'
+     RETURNING id, content, metadata, status, created_at, updated_at`,
+    [id]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Search for done task-type thoughts by semantic similarity.
+ */
+export async function searchDoneTasks(
+  queryEmbedding: number[],
+  limit: number = 5
+): Promise<SearchResult[]> {
+  const db = getPool();
+  const result = await db.query<SearchResult>(
+    `SELECT id, content, metadata, created_at,
+            1 - (embedding <=> $1::vector) AS similarity
+     FROM thoughts
+     WHERE status = 'done'
+       AND metadata->>'type' = 'task'
+     ORDER BY embedding <=> $1::vector
+     LIMIT $2`,
+    [JSON.stringify(queryEmbedding), limit]
+  );
+  return result.rows;
+}
+
+/**
  * Search for open task-type thoughts by semantic similarity.
  */
 export async function searchOpenTasks(

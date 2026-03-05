@@ -14,7 +14,7 @@
 
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { generateEmbedding, extractMetadata } from "../lib/azure-openai.js";
-import { insertThought, searchOpenTasks, markThoughtDone } from "../lib/database.js";
+import { insertThought, searchOpenTasks, searchDoneTasks, markThoughtDone, reopenThought } from "../lib/database.js";
 
 /**
  * Check if text starts with a completion keyword prefix.
@@ -22,6 +22,21 @@ import { insertThought, searchOpenTasks, markThoughtDone } from "../lib/database
  */
 function extractCompletionPrefix(text: string): string | null {
   const prefixes = ["done:", "completed:", "finished:", "shipped:", "closed:"];
+  const lower = text.toLowerCase();
+  for (const prefix of prefixes) {
+    if (lower.startsWith(prefix)) {
+      return text.slice(prefix.length).trim();
+    }
+  }
+  return null;
+}
+
+/**
+ * Check if text starts with a reopen keyword prefix.
+ * Returns the description portion if matched, or null.
+ */
+function extractReopenPrefix(text: string): string | null {
+  const prefixes = ["reopen:", "undo:", "not done:", "re-open:", "unfinish:"];
   const lower = text.toLowerCase();
   for (const prefix of prefixes) {
     if (lower.startsWith(prefix)) {
@@ -124,6 +139,49 @@ async function ingestThought(req: HttpRequest, context: InvocationContext): Prom
       generateEmbedding(cleanText),
       extractMetadata(cleanText),
     ]);
+
+    // Check for reopen intent — keyword prefix
+    const reopenMatch = extractReopenPrefix(cleanText);
+
+    if (reopenMatch) {
+      const searchEmbedding = await generateEmbedding(reopenMatch);
+      const matches = await searchDoneTasks(searchEmbedding, 1);
+
+      if (matches.length > 0 && matches[0].similarity > 0.3) {
+        const reopened = await reopenThought(matches[0].id);
+        if (reopened) {
+          const reopenedTitle = reopened.metadata?.title || reopened.content.substring(0, 60);
+          context.log(`Reopened task ${reopened.id}: "${reopenedTitle}"`);
+          return {
+            status: 200,
+            jsonBody: {
+              id: reopened.id,
+              reply: `🔄 **Reopened:** ${reopenedTitle}`,
+              type: "reopen",
+              title: reopenedTitle,
+              reopened: reopened.id,
+            },
+          };
+        }
+      }
+
+      // No match found — still store the thought
+      const [embedding, metadata] = await Promise.all([
+        generateEmbedding(cleanText),
+        extractMetadata(cleanText),
+      ]);
+      const thought = await insertThought(cleanText, embedding, metadata, "teams");
+      return {
+        status: 200,
+        jsonBody: {
+          id: thought.id,
+          reply: `🔄 Noted, but no matching completed task found to reopen`,
+          type: metadata.type,
+          title: metadata.title,
+          reopened: null,
+        },
+      };
+    }
 
     // Check for completion intent — keyword prefix OR AI-detected
     const prefixMatch = extractCompletionPrefix(cleanText);
