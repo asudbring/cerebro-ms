@@ -13,7 +13,7 @@
 
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { generateEmbedding, extractMetadata } from "../lib/azure-openai.js";
-import { searchThoughts, getRecentThoughts, getStats, insertThought } from "../lib/database.js";
+import { searchThoughts, getRecentThoughts, getStats, insertThought, searchOpenTasks, searchDoneTasks, markThoughtDone, reopenThought } from "../lib/database.js";
 import type { SearchResult, ThoughtRow, BrainStats } from "../lib/types.js";
 
 /**
@@ -165,6 +165,30 @@ async function handleMcpRequest(
               required: ["text"],
             },
           },
+          {
+            name: "complete_task",
+            description:
+              "Mark a task as done. Describe the task and it will find the closest matching open task by meaning and mark it complete.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                description: { type: "string", description: "Description of the task that was completed" },
+              },
+              required: ["description"],
+            },
+          },
+          {
+            name: "reopen_task",
+            description:
+              "Reopen a completed task. Describe the task and it will find the closest matching done task and set it back to open.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                description: { type: "string", description: "Description of the task to reopen" },
+              },
+              required: ["description"],
+            },
+          },
         ],
       },
     };
@@ -249,6 +273,82 @@ async function handleMcpRequest(
           };
         }
 
+        case "complete_task": {
+          const desc = args.description as string;
+          if (!desc) {
+            return {
+              jsonrpc: "2.0",
+              id,
+              result: { content: [{ type: "text", text: "Error: description is required." }] },
+            };
+          }
+
+          const taskEmbedding = await generateEmbedding(desc);
+          const matches = await searchOpenTasks(taskEmbedding, 1);
+
+          if (matches.length === 0 || matches[0].similarity <= 0.3) {
+            return {
+              jsonrpc: "2.0",
+              id,
+              result: { content: [{ type: "text", text: "No matching open task found. Try being more specific in your description." }] },
+            };
+          }
+
+          const completed = await markThoughtDone(matches[0].id);
+          const completedTitle = completed?.metadata?.title || matches[0].content.substring(0, 60);
+
+          return {
+            jsonrpc: "2.0",
+            id,
+            result: {
+              content: [
+                {
+                  type: "text",
+                  text: `✅ **Marked done:** ${completedTitle}\nID: ${matches[0].id}\nSimilarity: ${(matches[0].similarity * 100).toFixed(0)}%`,
+                },
+              ],
+            },
+          };
+        }
+
+        case "reopen_task": {
+          const desc = args.description as string;
+          if (!desc) {
+            return {
+              jsonrpc: "2.0",
+              id,
+              result: { content: [{ type: "text", text: "Error: description is required." }] },
+            };
+          }
+
+          const reopenEmbedding = await generateEmbedding(desc);
+          const doneMatches = await searchDoneTasks(reopenEmbedding, 1);
+
+          if (doneMatches.length === 0 || doneMatches[0].similarity <= 0.3) {
+            return {
+              jsonrpc: "2.0",
+              id,
+              result: { content: [{ type: "text", text: "No matching completed task found. Try being more specific in your description." }] },
+            };
+          }
+
+          const reopened = await reopenThought(doneMatches[0].id);
+          const reopenedTitle = reopened?.metadata?.title || doneMatches[0].content.substring(0, 60);
+
+          return {
+            jsonrpc: "2.0",
+            id,
+            result: {
+              content: [
+                {
+                  type: "text",
+                  text: `🔄 **Reopened:** ${reopenedTitle}\nID: ${doneMatches[0].id}`,
+                },
+              ],
+            },
+          };
+        }
+
         default:
           return {
             jsonrpc: "2.0",
@@ -300,7 +400,7 @@ async function mcpServer(req: HttpRequest, context: InvocationContext): Promise<
         name: "open-brain-mcp",
         version: "1.0.0",
         status: "ok",
-        tools: ["search_thoughts", "browse_recent", "brain_stats", "capture_thought"],
+        tools: ["search_thoughts", "browse_recent", "brain_stats", "capture_thought", "complete_task", "reopen_task"],
       },
     };
   }
