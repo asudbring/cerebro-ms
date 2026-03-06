@@ -7,8 +7,7 @@
 Most common cause: the Azure Function is cold-starting or the request body is malformed. Check the flow run history in Power Automate for the exact error.
 
 If the HTTP action returns a 400:
-- Verify the body expressions use `first()` — the "Get message details" output is an **array**
-- Check that `plainTextContent` path is correct: `first(outputs('Get_message_details'))?['body']?['body']?['plainTextContent']`
+- Verify the body expressions use `body('Get_message_details')` — e.g., `body('Get_message_details')?['body']?['plainTextContent']`
 - Look at the Compose action output to see the raw structure
 
 If the HTTP action returns a 401:
@@ -16,11 +15,22 @@ If the HTTP action returns a 401:
 
 ### Messages aren't being captured (no reply in Teams)
 
-1. **Check flow trigger:** Make sure the keyword (`brain`, `remember`) is in the message
+1. **Check flow trigger:** Make sure the flow uses "When a new channel message is added" pointed at your dedicated capture channel
 2. **Check flow run history** at [make.powerautomate.com](https://make.powerautomate.com) — look for failed runs
 3. **Check function logs:**
    ```bash
-   az functionapp log tail --name open-brain-functions --resource-group open-brain-rg
+   az functionapp log tail --name open-brain-func --resource-group open-brain-rg
+   ```
+
+### Capture flow is looping (infinite replies)
+
+The ingest function has a **loop guard** that rejects messages starting with `**Captured**`, `✅ **Marked done`, or `🔄 **Reopened**`. If you still see loops:
+
+1. **Turn off the flow** immediately at [make.powerautomate.com](https://make.powerautomate.com)
+2. Verify the flow uses **"Reply with a message"** (not "Post message") — replies don't trigger the "When a new channel message is added" trigger
+3. Clean up duplicate entries in the database:
+   ```sql
+   DELETE FROM thoughts WHERE content LIKE '%**Captured**%' OR content LIKE '%Captured as%';
    ```
 
 ### Function runs but nothing in the database
@@ -29,7 +39,7 @@ Most likely the `DATABASE_URL` is wrong or the PostgreSQL firewall is blocking t
 
 - Verify the connection string in app settings:
   ```bash
-  az functionapp config appsettings list --name open-brain-functions --resource-group open-brain-rg
+  az functionapp config appsettings list --name open-brain-func --resource-group open-brain-rg
   ```
 - Make sure you've allowed Azure services to connect:
   ```bash
@@ -48,8 +58,8 @@ That's normal. The LLM is making its best guess with limited context. The metada
 ### Task completion didn't match the right task
 
 The completion matching uses semantic similarity with a threshold of 0.3. If the description in your `done:` message is too vague, it may match the wrong task or fail to match at all. Be specific:
-- ✅ `brain done: vnet troubleshooting documentation`
-- ❌ `brain done: the docs`
+- ✅ `done: vnet troubleshooting documentation`
+- ❌ `done: the docs`
 
 ### Reopen didn't find the task
 
@@ -65,6 +75,10 @@ This means no thoughts were captured in the time period. The digest skips if the
 
 In the Power Automate "Send an email" action, click **Show advanced options** and toggle **Is HTML** to Yes. If the toggle isn't visible, the `summaryHtml` content should still render in most email clients since it contains HTML tags.
 
+### Digest Teams message fails with RequestEntityTooLarge
+
+Teams has a ~28KB message size limit. The digest function truncates the Teams-bound summary (`summary` field) when it exceeds 24KB — the AI summary is kept but the individual thought list is replaced with a note to check the email. The full content is always included in the `summaryHtml` field sent via email.
+
 ### Digest flow fails on the HTTP action
 
 Verify the digest URL includes the access key: `?key=YOUR-ACCESS-KEY`. The digest endpoints use the same `MCP_ACCESS_KEY` authentication.
@@ -76,7 +90,7 @@ Verify the digest URL includes the access key: `?key=YOUR-ACCESS-KEY`. The diges
 The access key doesn't match. Verify:
 ```bash
 az functionapp config appsettings list \
-  --name open-brain-functions \
+  --name open-brain-func \
   --resource-group open-brain-rg \
   --query "[?name=='MCP_ACCESS_KEY'].value" -o tsv
 ```

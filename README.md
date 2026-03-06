@@ -8,7 +8,7 @@ Adapted from [Nate B. Jones' Open Brain](https://natebjones.com) guide — same 
 
 ## What You're Building
 
-A Teams channel where you type a thought — Power Automate detects the keyword, sends it to an Azure Function that embeds and classifies it automatically — you get a confirmation reply. Mark tasks done by typing `done: <description>`. Reopen tasks with `reopen: <description>`. Get daily and weekly digests in Teams and email. Plus an MCP server that lets any AI assistant search your brain by meaning.
+A Teams channel where you post a thought — Power Automate detects the new message, sends it to an Azure Function that embeds and classifies it automatically — you get a confirmation reply. Mark tasks done by typing `done: <description>`. Reopen tasks with `reopen: <description>`. Get daily and weekly digests in Teams and email. Plus an MCP server that lets any AI assistant search your brain by meaning.
 
 ```
 You post in Teams  →  Power Automate  →  Azure Function  →  AI embeds + classifies  →  PostgreSQL
@@ -40,9 +40,9 @@ You post in Teams  →  Power Automate  →  Azure Function  →  AI embeds + cl
 
 ## Features
 
-- **Capture:** Type `brain <thought>` in Teams → auto-embedded, classified, stored
-- **Complete:** Type `brain done: <task>` → semantically matches and marks the closest open task as done
-- **Reopen:** Type `brain reopen: <task>` → finds and reopens a completed task
+- **Capture:** Post a thought in your dedicated Teams channel → auto-embedded, classified, stored
+- **Complete:** Type `done: <task>` → semantically matches and marks the closest open task as done
+- **Reopen:** Type `reopen: <task>` → finds and reopens a completed task
 - **Daily Digest:** AI-generated summary of yesterday's thoughts + top 3 completed tasks
 - **Weekly Digest:** Theme analysis, open loops, top 5 completed tasks
 - **MCP Server:** 4 tools (search_thoughts, browse_recent, brain_stats, capture_thought) for any AI client
@@ -296,7 +296,7 @@ Your function URLs will be:
 
 ## Step 4: Set Up Power Automate Capture Flow
 
-Power Automate connects Teams to your Azure Function. When you type a keyword in Teams, it captures the thought and replies with a confirmation.
+Power Automate connects Teams to your Azure Function. When you post a message in your dedicated capture channel, it captures the thought and replies with a confirmation.
 
 > **Why Power Automate?** Microsoft is retiring Office 365 Connectors (incoming webhooks) and steering away from outgoing webhooks. Power Automate is the future-proof approach for Teams integration.
 
@@ -304,10 +304,9 @@ Power Automate connects Teams to your Azure Function. When you type a keyword in
 
 1. Go to [make.powerautomate.com](https://make.powerautomate.com) → **Create** → **Automated cloud flow**
 2. Name: **Open Brain — Capture**
-3. Trigger: **When keywords are mentioned** (Microsoft Teams)
-   - **Keywords:** `brain, remember`
+3. Trigger: **When a new channel message is added** (Microsoft Teams)
    - **Team:** your team
-   - **Channel:** your capture channel
+   - **Channel:** your dedicated capture channel
 
 4. **Add action: Get message details** (Microsoft Teams)
    - **Message ID:** use the Message ID from the trigger output
@@ -315,7 +314,7 @@ Power Automate connects Teams to your Azure Function. When you type a keyword in
    - **Channel:** same channel
 
 5. **Add action: Compose** (Data Operations) — *optional, helps debug*
-   - **Inputs:** `@{outputs('Get_message_details')}`
+   - **Inputs:** `@{body('Get_message_details')}`
 
 6. **Add action: HTTP**
    - **Method:** POST
@@ -324,27 +323,53 @@ Power Automate connects Teams to your Azure Function. When you type a keyword in
    - **Body:**
      ```json
      {
-       "text": "@{first(outputs('Get_message_details'))?['body']?['body']?['plainTextContent']}",
-       "from": "@{first(outputs('Get_message_details'))?['body']?['from']?['user']?['displayName']}"
+       "text": "@{body('Get_message_details')?['body']?['plainTextContent']}",
+       "from": "@{body('Get_message_details')?['from']?['user']?['displayName']}"
      }
      ```
 
-7. **Add action: Reply with a message in a channel** (Microsoft Teams)
-   - **Message ID:** `@{first(outputs('Get_message_details'))?['body']?['id']}`
-   - **Team:** same team
-   - **Channel:** same channel
-   - **Message:** `@{body('HTTP')?['reply']}`
+7. **Add action: Parse JSON**
+   - **Content:** `@{body('HTTP')}`
+   - **Schema:**
+     ```json
+     {
+       "type": "object",
+       "properties": {
+         "id": { "type": "string" },
+         "reply": { "type": "string" },
+         "type": { "type": "string" },
+         "title": { "type": "string" },
+         "markedDone": { "type": ["string", "null"] },
+         "skipped": { "type": "boolean" },
+         "reason": { "type": "string" }
+       }
+     }
+     ```
 
-8. **Save** and test by typing `brain test thought` in your Teams channel.
+8. **Add action: Condition**
+   - `body('Parse_JSON')?['skipped']` is equal to `true`
 
-> **Important:** The "Get message details" output is an **array** — you must use `first()` to access the first element. This is the most common gotcha when setting up the flow.
+9. **No branch** (not skipped):
+   - **Reply with a message in a channel** (Microsoft Teams)
+     - **Message ID:** use the Message ID from the trigger output
+     - **Team:** same team
+     - **Channel:** same channel
+     - **Message:** `@{body('Parse_JSON')?['reply']}`
+
+10. **Yes branch** — leave empty (skipped = nothing to reply)
+
+11. **Save** and test by posting a thought in your capture channel.
+
+> **Important:** Use "Reply with a message" (not "Post message") so the reply doesn't re-trigger the flow. The trigger only fires on new messages, not replies.
+>
+> **Loop guard:** The ingest function also rejects messages that look like its own reply text (starting with `**Captured**`, `✅ **Marked done`, or `🔄 **Reopened`), providing defense-in-depth against infinite loops.
 
 ### Test Capture
 
-In your Teams channel, type:
+In your Teams capture channel, post:
 
 ```
-brain Sarah mentioned she's thinking about leaving her job to start a consulting business
+Sarah mentioned she's thinking about leaving her job to start a consulting business
 ```
 
 Wait 5–10 seconds. You should see a reply:
@@ -359,7 +384,7 @@ Wait 5–10 seconds. You should see a reply:
 
 Mark a task as done:
 ```
-brain done: the API redesign
+done: the API redesign
 ```
 > ✅ **Marked done:** API Redesign Project
 
@@ -367,7 +392,7 @@ brain done: the API redesign
 
 Reopen a completed task:
 ```
-brain reopen: the API redesign
+reopen: the API redesign
 ```
 > 🔄 **Reopened:** API Redesign Project
 

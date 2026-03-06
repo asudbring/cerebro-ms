@@ -184,8 +184,16 @@ async function dailyDigest(req: HttpRequest, context: InvocationContext): Promis
   const title = `🧠 Daily Brain Digest — ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}`;
   const completedMd = formatCompletedMarkdown(completed);
   const completedHtml = formatCompletedHtml(completed);
-  const bodyMarkdown = `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** captured today${completedMd}\n\n${summary}\n\n---\n${formatThoughtList(activeThoughts)}`;
-  const bodyHtml = `<h2>${title}</h2><p><strong>${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}</strong> captured today</p>${completedHtml}${summary ? markdownToHtml(summary) : ""}<hr>${formatThoughtListHtml(activeThoughts)}`;
+  const thoughtListMd = formatThoughtList(activeThoughts);
+  const thoughtListHtml = formatThoughtListHtml(activeThoughts);
+  const fullMarkdown = `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** captured today${completedMd}\n\n${summary}\n\n---\n${thoughtListMd}`;
+  // Teams messages have a ~28KB limit — truncate if needed, keeping summary intact
+  const MAX_TEAMS_LENGTH = 24000;
+  const bodyMarkdown = fullMarkdown.length > MAX_TEAMS_LENGTH
+    ? `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** captured today${completedMd}\n\n${summary}\n\n---\n*(${activeThoughts.length} thoughts — full list in email)*`
+    : fullMarkdown;
+  // Email has no practical size limit — always include full list
+  const bodyHtml = `<h2>${title}</h2><p><strong>${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}</strong> captured today</p>${completedHtml}${summary ? markdownToHtml(summary) : ""}<hr>${thoughtListHtml}`;
 
   return {
     status: 200,
@@ -246,7 +254,11 @@ async function weeklyDigest(req: HttpRequest, context: InvocationContext): Promi
 
   const completedMd = formatCompletedMarkdown(completed);
   const completedHtml = formatCompletedHtml(completed);
-  const bodyMarkdown = `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** this week (${typeSummary})\n**${stats.total_thoughts} total** in your brain${completedMd}\n\n${summary}`;
+  const fullMarkdown = `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** this week (${typeSummary})\n**${stats.total_thoughts} total** in your brain${completedMd}\n\n${summary}`;
+  const MAX_TEAMS_LENGTH = 24000;
+  const bodyMarkdown = fullMarkdown.length > MAX_TEAMS_LENGTH
+    ? `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** this week (${typeSummary})\n**${stats.total_thoughts} total** in your brain${completedMd}\n\n*(Full summary in email)*`
+    : fullMarkdown;
   const bodyHtml = `<h2>${title}</h2><p><strong>${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}</strong> this week (${typeSummary})<br><strong>${stats.total_thoughts} total</strong> in your brain</p>${completedHtml}${summary ? markdownToHtml(summary) : ""}`;
 
   return {

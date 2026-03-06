@@ -33,4 +33,4 @@ These prompts reference the MCP tools exposed by the Open Brain Azure Function:
 - `browse_recent` — list recent thoughts (used by prompt 5)
 - `brain_stats` — overview stats (used by prompt 5)
 
-Capture templates use the `brain` keyword trigger in Teams (via Power Automate), or "save this" / "remember this" for MCP-connected AI clients.
+Capture templates are designed for your dedicated Teams capture channel (via Power Automate), or "save this" / "remember this" for MCP-connected AI clients.

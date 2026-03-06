@@ -12,7 +12,7 @@ The architecture has three parts: **capture** (thoughts in), **retrieval** (thou
                          CAPTURE PATH
 ┌────────────┐     ┌──────────────┐     ┌──────────────────┐     ┌──────────────────┐
 │ Teams       │────▶│ Power        │────▶│ Azure Function:  │────▶│ Azure OpenAI     │
-│ keyword msg │     │ Automate     │     │ ingest-thought   │     │ embed + classify │
+│ channel msg │     │ Automate     │     │ ingest-thought   │     │ embed + classify │
 └────────────┘     └──────────────┘     └──────────────────┘     └──────────────────┘
                                                │                         │
                                                │    ┌────────────────────┘
@@ -44,7 +44,7 @@ The architecture has three parts: **capture** (thoughts in), **retrieval** (thou
 
 | Layer | Tool | Job |
 |-------|------|-----|
-| **Interface** | Microsoft Teams | Where you capture — type a keyword, post a thought |
+| **Interface** | Microsoft Teams | Where you capture — post a thought in a dedicated channel |
 | **Automation** | Power Automate | Where routing happens — connects Teams to Azure Functions |
 | **Transport** | Azure Functions | Where processing happens — four HTTP-triggered functions |
 | **Intelligence** | Azure OpenAI | Where understanding happens — embeddings (meaning) + chat (metadata + digests) |
@@ -90,8 +90,9 @@ Reopening works the same way — `reopen:` searches done tasks and sets them bac
 ### ingest-thought
 - **Trigger:** HTTP POST from Power Automate
 - **Validates:** API key via header or query param
+- **Loop guard:** Rejects messages that match bot reply patterns (prevents infinite loops if Power Automate re-triggers on its own replies)
 - **Does:** Strip @mention → embed + classify in parallel → detect completion/reopen → insert to DB → return reply JSON
-- **Returns:** JSON with reply text, type, title, and markedDone/reopened ID
+- **Returns:** JSON with reply text, type, title, and markedDone/reopened ID (or `skipped: true` if loop guard triggered)
 
 ### open-brain-mcp
 - **Trigger:** HTTP POST/GET with access key auth
@@ -102,7 +103,7 @@ Reopening works the same way — `reopen:` searches done tasks and sets them bac
 ### daily-digest
 - **Trigger:** HTTP GET from Power Automate (scheduled daily)
 - **Does:** Query last 24h thoughts + completed tasks → AI-generate summary → return JSON
-- **Returns:** title, summary (markdown for Teams), summaryHtml (for email), thoughtCount
+- **Returns:** title, summary (markdown for Teams, truncated to fit Teams' ~28KB message limit), summaryHtml (full content for email), thoughtCount
 
 ### weekly-digest
 - **Trigger:** HTTP GET from Power Automate (scheduled weekly)

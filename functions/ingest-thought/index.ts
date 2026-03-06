@@ -126,6 +126,12 @@ async function ingestThought(req: HttpRequest, context: InvocationContext): Prom
     return { status: 400, jsonBody: { error: "Empty message after processing" } };
   }
 
+  // Loop guard: reject messages that look like our own reply (bot re-capturing itself)
+  if (cleanText.startsWith("**Captured**") || cleanText.startsWith("✅ **Marked done") || cleanText.startsWith("🔄 **Reopened")) {
+    context.log("Loop guard: rejecting bot reply re-capture");
+    return { status: 200, jsonBody: { skipped: true, reason: "Bot reply detected — not re-capturing" } };
+  }
+
   // Extract sender name
   const from = typeof body.from === "string"
     ? body.from

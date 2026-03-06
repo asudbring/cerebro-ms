@@ -22,10 +22,10 @@ EMBEDDING_DEPLOYMENT=text-embedding-3-small
 CHAT_DEPLOYMENT=gpt-4o-mini
 
 # --- Azure Functions (Step 3) ---
-FUNCTION_APP_NAME=                 # e.g., open-brain-functions
-INGEST_FUNCTION_URL=               # e.g., https://open-brain-functions.azurewebsites.net/api/ingest-thought
-DAILY_DIGEST_URL=                  # e.g., https://open-brain-functions.azurewebsites.net/api/daily-digest
-WEEKLY_DIGEST_URL=                 # e.g., https://open-brain-functions.azurewebsites.net/api/weekly-digest
+FUNCTION_APP_NAME=                 # e.g., open-brain-func
+INGEST_FUNCTION_URL=               # e.g., https://open-brain-func.azurewebsites.net/api/ingest-thought
+DAILY_DIGEST_URL=                  # e.g., https://open-brain-func.azurewebsites.net/api/daily-digest
+WEEKLY_DIGEST_URL=                 # e.g., https://open-brain-func.azurewebsites.net/api/weekly-digest
 
 # --- MCP Access Key (Step 5) ---
 MCP_ACCESS_KEY=                    # 64-character hex string from openssl rand -hex 32

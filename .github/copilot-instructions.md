@@ -25,14 +25,16 @@ cd functions
 npm install          # install dependencies
 npm run build        # compile TypeScript
 npm run start        # local dev server (requires Azure Functions Core Tools)
-func azure functionapp publish open-brain-functions --node  # deploy to Azure
+func azure functionapp publish open-brain-func --node  # deploy to Azure
 ```
 
 ## Key Conventions
 
 - **Embedding and metadata extraction run in parallel** (`Promise.all`). Both functions do this — never make them sequential.
 - **The embedding is the primary retrieval mechanism.** Metadata (title, type, people, tags) is a convenience layer for browsing/filtering. Don't over-rely on metadata accuracy.
-- **Power Automate handles Teams integration.** The "When keywords are mentioned" trigger detects messages, "Get message details" fetches the body (returns an array — use `first()`), HTTP action calls the function, reply action posts back. No direct webhook connection.
+- **Power Automate handles Teams integration.** The "When a new channel message is added" trigger detects messages in a dedicated capture channel, "Get message details" fetches the body, HTTP action calls the function, reply action posts back as a reply (not a new message). No keyword trigger — every message in the channel is captured.
+- **Loop guard in ingest-thought.** The function rejects messages that start with bot reply patterns (`**Captured**`, `✅ **Marked done`, `🔄 **Reopened`). This prevents infinite loops if Power Automate re-triggers on its own replies.
+- **Digest summaries are truncated for Teams.** The `summary` field (markdown for Teams) is capped at ~24KB. If the full content exceeds this, the thought list is omitted from Teams and only included in the `summaryHtml` field for email.
 - **Task completion uses semantic matching.** When `done:` prefix or AI-detected completion intent is found, the ingest function generates an embedding and searches for the closest open task by vector similarity.
 - **Reopen uses the same pattern.** `reopen:` prefix triggers a search against done tasks.
 - **Access key validation** on both ingest and MCP endpoints accepts both `x-brain-key` header and `?key=` query param. Always check both.
