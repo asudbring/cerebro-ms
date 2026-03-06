@@ -15,6 +15,8 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { generateEmbedding, extractMetadata } from "../lib/azure-openai.js";
 import { insertThought, searchOpenTasks, searchDoneTasks, markThoughtDone, reopenThought } from "../lib/database.js";
+import { uploadFile, generateSasUrl } from "../lib/blob-storage.js";
+import { analyzeFile, type FileAnalysisResult } from "../lib/file-analysis.js";
 
 /**
  * Check if text starts with a completion keyword prefix.
@@ -140,11 +142,63 @@ async function ingestThought(req: HttpRequest, context: InvocationContext): Prom
   context.log(`Processing thought from ${from}: "${cleanText.substring(0, 80)}..."`);
 
   try {
+    // Process attachments if present
+    const attachments = body.attachments as Array<{ name: string; contentUrl: string; contentType: string }> | undefined;
+    let fileAnalysis: FileAnalysisResult | null = null;
+    let fileUrl: string | null = null;
+    let fileType: string | null = null;
+
+    if (attachments && attachments.length > 0) {
+      const att = attachments[0]; // process first attachment
+      context.log(`Processing attachment: ${att.name} (${att.contentType})`);
+
+      try {
+        // Download the file from the provided URL
+        const downloadHeaders: Record<string, string> = { "Accept": "*/*" };
+        if (body.graphToken) {
+          downloadHeaders["Authorization"] = `Bearer ${body.graphToken}`;
+        }
+        const fileResponse = await fetch(att.contentUrl, { headers: downloadHeaders });
+        if (!fileResponse.ok) {
+          context.warn(`Failed to download attachment: ${fileResponse.status} ${fileResponse.statusText}`);
+        } else {
+          const fileBuffer = Buffer.from(await fileResponse.arrayBuffer());
+          context.log(`Downloaded ${att.name}: ${fileBuffer.length} bytes`);
+
+          // Upload to blob storage and analyze in parallel
+          const [uploadResult, analysis] = await Promise.all([
+            uploadFile(fileBuffer, att.name, att.contentType),
+            analyzeFile(fileBuffer, att.contentType, att.name),
+          ]);
+
+          fileUrl = generateSasUrl(uploadResult.blobName);
+          fileType = att.contentType;
+          fileAnalysis = analysis;
+          context.log(`File uploaded: ${uploadResult.blobName}, analysis: ${analysis.fileType}`);
+        }
+      } catch (fileError) {
+        context.warn("Attachment processing failed, continuing with text only:", fileError);
+      }
+    }
+
+    // Combine text + file analysis for embedding and metadata
+    const contentForEmbedding = fileAnalysis
+      ? `${cleanText}\n\n[Attached ${fileAnalysis.fileType}: ${fileAnalysis.description}]`
+      : cleanText;
+
     // Generate embedding and extract metadata in parallel
     const [embedding, metadata] = await Promise.all([
-      generateEmbedding(cleanText),
-      extractMetadata(cleanText),
+      generateEmbedding(contentForEmbedding),
+      extractMetadata(contentForEmbedding),
     ]);
+
+    // Add file metadata if present
+    if (fileAnalysis && fileUrl) {
+      metadata.has_file = true;
+      metadata.file_name = attachments![0].name;
+      metadata.file_description = fileAnalysis.description.slice(0, 500);
+      metadata.file_url = fileUrl;
+    }
 
     // Check for reopen intent — keyword prefix
     const reopenMatch = extractReopenPrefix(cleanText);
@@ -211,11 +265,16 @@ async function ingestThought(req: HttpRequest, context: InvocationContext): Prom
     }
 
     // Store the thought itself
-    const thought = await insertThought(cleanText, embedding, metadata, "teams");
+    const thought = await insertThought(cleanText, embedding, metadata, "teams", fileUrl, fileType);
 
-    context.log(`Stored thought ${thought.id} as ${metadata.type}`);
+    context.log(`Stored thought ${thought.id} as ${metadata.type}${fileUrl ? " (with file)" : ""}`);
 
     let reply = formatReply(metadata as Record<string, unknown>);
+
+    // Add file confirmation to reply
+    if (fileAnalysis && fileUrl) {
+      reply += `\n\n📎 **File:** ${attachments![0].name} — ${fileAnalysis.description.slice(0, 150)}`;
+    }
 
     if (markedDoneThought) {
       const doneTitle = markedDoneThought.metadata?.title || markedDoneThought.content.substring(0, 60);
@@ -246,6 +305,8 @@ async function ingestThought(req: HttpRequest, context: InvocationContext): Prom
         has_reminder: metadata.has_reminder || false,
         reminder_title: metadata.reminder_title || null,
         reminder_datetime: metadata.reminder_datetime || null,
+        has_file: !!fileUrl,
+        file_url: fileUrl || null,
       },
     };
   } catch (error) {

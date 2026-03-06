@@ -44,7 +44,8 @@ function formatSearchResults(results: SearchResult[]): string {
       const meta = r.metadata;
       const title = meta?.title || "Untitled";
       const type = meta?.type || "unknown";
-      return `**${i + 1}. ${title}** (${type}, ${sim}% match, ${date})\n${r.content}`;
+      const fileInfo = meta?.has_file ? `\n📎 File: ${meta.file_name || "attached"} — [View](${meta.file_url || ""})` : "";
+      return `**${i + 1}. ${title}** (${type}, ${sim}% match, ${date})\n${r.content}${fileInfo}`;
     })
     .join("\n\n---\n\n");
 }
@@ -61,7 +62,8 @@ function formatRecentThoughts(thoughts: ThoughtRow[]): string {
       const meta = t.metadata;
       const title = meta?.title || "Untitled";
       const type = meta?.type || "unknown";
-      return `**${i + 1}. ${title}** (${type}, ${date})\n${t.content}`;
+      const fileInfo = meta?.has_file ? `\n📎 File: ${meta.file_name || "attached"} — [View](${meta.file_url || ""})` : "";
+      return `**${i + 1}. ${title}** (${type}, ${date})\n${t.content}${fileInfo}`;
     })
     .join("\n\n---\n\n");
 }

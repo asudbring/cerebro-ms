@@ -157,3 +157,23 @@ Azure Database for PostgreSQL Flexible Server supports pgvector natively. If `CR
   ```sql
   SELECT id, metadata->>'reminder_title', metadata->>'reminder_datetime' FROM thoughts WHERE metadata->>'has_reminder' = 'true';
   ```
+
+## File Capture Issues
+
+### File not being captured from Teams message
+
+- Verify the HTTP action body includes the `attachments` field: `"attachments": @{body('Get_message_details')?['attachments']}`
+- Check that the Teams message actually has an attachment (inline images in rich text may not appear as attachments)
+- Try uploading the file as a proper attachment rather than pasting it inline
+
+### File uploaded but no AI analysis
+
+- Check that `AZURE_OPENAI_VISION_DEPLOYMENT=gpt-4o` is set in the function app settings
+- Verify the gpt-4o deployment exists in your Azure OpenAI account
+- Image files larger than 20MB may fail — try resizing before posting
+
+### File URL not accessible
+
+- File URLs use SAS tokens with 1-year expiry — check if the token has expired
+- Verify the `brain-files` container exists in `openbrainstorage`
+- Check that `AZURE_STORAGE_CONNECTION_STRING` is set correctly in function app settings

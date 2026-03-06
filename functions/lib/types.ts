@@ -7,6 +7,8 @@ export interface ThoughtRow {
   embedding?: number[];
   metadata: ThoughtMetadata;
   status: string;
+  file_url?: string | null;
+  file_type?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +24,10 @@ export interface ThoughtMetadata {
   has_reminder?: boolean;
   reminder_title?: string;
   reminder_datetime?: string;
+  has_file?: boolean;
+  file_name?: string;
+  file_description?: string;
+  file_url?: string;
   [key: string]: unknown;
 }
 

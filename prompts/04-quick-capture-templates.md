@@ -1,6 +1,6 @@
 # Prompt 4: Quick Capture Templates
 
-Eight patterns for capturing thoughts, completing tasks, reopening items, and setting reminders. Each one is optimized for clean metadata extraction in your Open Brain's processing pipeline.
+Nine patterns for capturing thoughts, completing tasks, reopening items, setting reminders, and capturing files. Each one is optimized for clean metadata extraction in your Open Brain's processing pipeline.
 
 ## When to Use
 
@@ -155,3 +155,16 @@ don't forget: team standup prep tomorrow 8:30am
 ```
 
 **Why it works:** The AI detects time/date references and extracts a reminder title + datetime. The function returns `has_reminder: true` with the details, and Power Automate creates an Outlook calendar event (15-min, shows as Free, 24-hour advance reminder). If no time is specified, it defaults to 09:00 Central Time.
+
+---
+
+## 9. Capture a File (Image, PDF, Doc) 📎
+
+**How:** Just post a file (drag & drop, paste, or attach) in your capture channel. Optionally add a text message for context.
+
+**Examples:**
+- Paste a screenshot with no text → AI describes what's in the image
+- Attach a PDF with the message "budget proposal from Sarah" → stored + indexed with your note
+- Drag in a Word doc → text extracted and embedded for search
+
+**Why it works:** The function detects attachments in the Teams message, downloads the file, uploads it to Azure Blob Storage, and analyzes it (gpt-4o vision for images, text extraction for docs). The analysis is combined with your message text, embedded, and stored. MCP tools include file URLs in search results for retrieval.

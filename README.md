@@ -41,13 +41,14 @@ You post in Teams  →  Power Automate  →  Azure Function  →  AI embeds + cl
 ## Features
 
 - **Capture:** Post a thought in your dedicated Teams channel → auto-embedded, classified, stored
+- **File Capture:** Post images, PDFs, or Word docs → stored in Azure Blob Storage, analyzed by AI (gpt-4o vision for images), indexed for semantic search
 - **Complete:** Type `done: <task>` → semantically matches and marks the closest open task as done
 - **Reopen:** Type `reopen: <task>` → finds and reopens a completed task
 - **Reminders:** Include a time/date in your thought → calendar event created automatically (shows as Free, 24-hour advance reminder)
 - **Daily Digest:** AI-generated summary of yesterday's thoughts + completed tasks + upcoming reminders (next 48h)
 - **Weekly Digest:** Theme analysis, open loops, completed tasks + upcoming reminders (next 7 days)
 - **MCP Server:** 4 tools (search_thoughts, browse_recent, brain_stats, capture_thought) for any AI client
-- **Semantic Search:** Find thoughts by meaning, not keywords
+- **Semantic Search:** Find thoughts by meaning, not keywords — includes file contents
 
 ## Prerequisites
 
@@ -425,6 +426,40 @@ remind me to submit the TPS report by Friday at 3pm
 > 📅 **Reminder set:** Submit the TPS report — Fri, Mar 7, 3:00 PM
 
 A calendar event will appear in your Outlook calendar (15-minute event, shown as Free) with a 24-hour advance reminder.
+
+### File Capture (Images, PDFs, Docs)
+
+To capture file attachments posted in your Teams channel, update the **HTTP** action body in your capture flow:
+
+1. Open your **Open Brain — Capture** flow → **Edit**
+2. Click the **HTTP** action
+3. Replace the **Body** with:
+   ```json
+   {
+     "text": "@{body('Get_message_details')?['body']?['plainTextContent']}",
+     "from": "@{body('Get_message_details')?['from']?['user']?['displayName']}",
+     "attachments": @{body('Get_message_details')?['attachments']}
+   }
+   ```
+4. **Update the Parse JSON schema** to include file fields:
+   ```json
+   "has_file": { "type": "boolean" },
+   "file_url": { "type": ["string", "null"] }
+   ```
+5. **Save** and test by posting a screenshot in your capture channel
+
+The function will:
+- Download the file from Teams
+- Upload it to Azure Blob Storage (`brain-files` container)
+- Analyze images with gpt-4o vision (description + OCR)
+- Extract text from Word documents
+- Combine the analysis with your message text for embedding
+
+Supported file types:
+- **Images:** PNG, JPG, GIF, WebP → AI vision analysis
+- **Word docs:** DOCX → text extraction
+- **PDFs:** Noted as attached (full text extraction planned for future update)
+- **Other files:** Stored and noted in metadata
 
 **If capture works, Part 1 is done.**
 

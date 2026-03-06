@@ -30,14 +30,16 @@ export async function insertThought(
   content: string,
   embedding: number[],
   metadata: ThoughtMetadata,
-  source: string = "teams"
+  source: string = "teams",
+  fileUrl?: string | null,
+  fileType?: string | null
 ): Promise<ThoughtRow> {
   const db = getPool();
   const result = await db.query<ThoughtRow>(
-    `INSERT INTO thoughts (content, embedding, metadata)
-     VALUES ($1, $2::vector, $3)
-     RETURNING id, content, metadata, status, created_at, updated_at`,
-    [content, JSON.stringify(embedding), { ...metadata, source }]
+    `INSERT INTO thoughts (content, embedding, metadata, file_url, file_type)
+     VALUES ($1, $2::vector, $3, $4, $5)
+     RETURNING id, content, metadata, status, file_url, file_type, created_at, updated_at`,
+    [content, JSON.stringify(embedding), { ...metadata, source }, fileUrl || null, fileType || null]
   );
   return result.rows[0];
 }
