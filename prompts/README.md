@@ -20,7 +20,7 @@ Five prompts that cover the full Open Brain lifecycle: migrate your existing AI 
 
 3. **Run the Spark** to discover capture patterns specific to your workflow. This generates your "First 5 Captures" list.
 
-4. **Keep the Capture Templates** handy for your first week. They optimize metadata extraction so your brain tags and retrieves accurately. Also covers task completion (`done:`) and reopen (`reopen:`) commands.
+4. **Keep the Capture Templates** handy for your first week. They optimize metadata extraction so your brain tags and retrieves accurately. Also covers task completion (`done:`), reopen (`reopen:`), and reminder commands (include a date/time to auto-create calendar events).
 
 5. **The Weekly Review** is the ongoing habit. Run it every Friday or Sunday. It compounds — the more you capture during the week, the more valuable the review becomes.
 
@@ -33,4 +33,4 @@ These prompts reference the MCP tools exposed by the Open Brain Azure Function:
 - `browse_recent` — list recent thoughts (used by prompt 5)
 - `brain_stats` — overview stats (used by prompt 5)
 
-Capture templates are designed for your dedicated Teams capture channel (via Power Automate), or "save this" / "remember this" for MCP-connected AI clients.
+Capture templates are designed for your dedicated Teams capture channel (via Power Automate), or "save this" / "remember this" for MCP-connected AI clients. Thoughts with time/date references automatically create Outlook calendar events with 24-hour advance reminders.
