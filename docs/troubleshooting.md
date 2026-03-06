@@ -133,3 +133,27 @@ Cold starts on the Azure Functions Consumption plan can take 10-20 seconds. Subs
 ### pgvector extension not available
 
 Azure Database for PostgreSQL Flexible Server supports pgvector natively. If `CREATE EXTENSION vector` fails, check that your PostgreSQL version is 13+ and that you're running on Flexible Server (not Single Server, which is deprecated).
+
+## Reminder Issues
+
+### Reminder not creating a calendar event
+
+- Verify the Parse JSON schema includes `has_reminder`, `reminder_title`, and `reminder_datetime` fields
+- Check the Condition in Power Automate: `body('Parse_JSON')?['has_reminder']` is equal to `true`
+- Confirm the "Create event (V4)" action has correct field mappings (Subject, Start time, End time)
+- Check that the Office 365 Outlook connector is authorized for your account
+
+### Reminder date/time is wrong
+
+- The AI extracts dates relative to the current time (injected at runtime). Check if the function's timezone offset is correct (currently -06:00 Central Time)
+- If only a date is given with no time, it defaults to 09:00
+- Try being more explicit: "remind me Friday March 14 at 2:30pm" instead of "remind me next week"
+
+### Reminders not showing in digests
+
+- Reminders appear in digests based on the `reminder_datetime` stored in the thought's metadata JSONB column
+- Daily digest shows reminders due in the next 48 hours; weekly shows the next 7 days
+- Check that the thought was captured with `has_reminder: true` in its metadata:
+  ```sql
+  SELECT id, metadata->>'reminder_title', metadata->>'reminder_datetime' FROM thoughts WHERE metadata->>'has_reminder' = 'true';
+  ```

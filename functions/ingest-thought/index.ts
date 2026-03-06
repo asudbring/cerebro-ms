@@ -224,6 +224,16 @@ async function ingestThought(req: HttpRequest, context: InvocationContext): Prom
       reply = `✅ Noted as completed (no matching open task found to mark done)\n\n${reply}`;
     }
 
+    // Add reminder confirmation to reply
+    if (metadata.has_reminder && metadata.reminder_title && metadata.reminder_datetime) {
+      const reminderDate = new Date(metadata.reminder_datetime);
+      const formatted = reminderDate.toLocaleString("en-US", {
+        weekday: "short", month: "short", day: "numeric",
+        hour: "numeric", minute: "2-digit", hour12: true,
+      });
+      reply += `\n\n📅 **Reminder:** ${metadata.reminder_title} — ${formatted}`;
+    }
+
     // Return structured JSON that Power Automate can parse
     return {
       status: 200,
@@ -233,6 +243,9 @@ async function ingestThought(req: HttpRequest, context: InvocationContext): Prom
         type: metadata.type,
         title: metadata.title,
         markedDone: markedDoneThought ? markedDoneThought.id : null,
+        has_reminder: metadata.has_reminder || false,
+        reminder_title: metadata.reminder_title || null,
+        reminder_datetime: metadata.reminder_datetime || null,
       },
     };
   } catch (error) {

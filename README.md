@@ -43,8 +43,9 @@ You post in Teams  →  Power Automate  →  Azure Function  →  AI embeds + cl
 - **Capture:** Post a thought in your dedicated Teams channel → auto-embedded, classified, stored
 - **Complete:** Type `done: <task>` → semantically matches and marks the closest open task as done
 - **Reopen:** Type `reopen: <task>` → finds and reopens a completed task
-- **Daily Digest:** AI-generated summary of yesterday's thoughts + top 3 completed tasks
-- **Weekly Digest:** Theme analysis, open loops, top 5 completed tasks
+- **Reminders:** Include a time/date in your thought → calendar event created automatically (shows as Free, 24-hour advance reminder)
+- **Daily Digest:** AI-generated summary of yesterday's thoughts + completed tasks + upcoming reminders (next 48h)
+- **Weekly Digest:** Theme analysis, open loops, completed tasks + upcoming reminders (next 7 days)
 - **MCP Server:** 4 tools (search_thoughts, browse_recent, brain_stats, capture_thought) for any AI client
 - **Semantic Search:** Find thoughts by meaning, not keywords
 
@@ -355,6 +356,17 @@ Power Automate connects Teams to your Azure Function. When you post a message in
      - **Team:** same team
      - **Channel:** same channel
      - **Message:** `@{body('Parse_JSON')?['reply']}`
+   - **Add action: Condition** (nested inside the No branch)
+     - `body('Parse_JSON')?['has_reminder']` is equal to `true`
+     - **Yes branch:** Add **Create event (V4)** (Office 365 Outlook)
+       - **Calendar:** Calendar (your default)
+       - **Subject:** `@{body('Parse_JSON')?['reminder_title']}`
+       - **Start time:** `@{body('Parse_JSON')?['reminder_datetime']}`
+       - **End time:** `@{addMinutes(body('Parse_JSON')?['reminder_datetime'], 15)}`
+       - **Time zone:** (UTC-06:00) Central Time
+       - **Show As:** Free
+       - **Reminder:** Yes, 1440 minutes (= 24 hours before)
+     - **No branch:** leave empty
 
 10. **Yes branch** — leave empty (skipped = nothing to reply)
 
@@ -401,6 +413,18 @@ reopen: the API redesign
 **Reopen prefixes:** `reopen:`, `undo:`, `not done:`, `re-open:`
 
 Natural language also works — "I finished the API redesign" will be detected as a completion by the AI.
+
+### Set a Reminder
+
+Post a thought with a time reference:
+```
+remind me to submit the TPS report by Friday at 3pm
+```
+> **Captured** as `task` — TPS Report Submission
+>
+> 📅 **Reminder set:** Submit the TPS report — Fri, Mar 7, 3:00 PM
+
+A calendar event will appear in your Outlook calendar (15-minute event, shown as Free) with a 24-hour advance reminder.
 
 **If capture works, Part 1 is done.**
 

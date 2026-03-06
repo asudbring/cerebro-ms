@@ -11,7 +11,7 @@
 
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { AzureOpenAI } from "openai";
-import { getThoughtsSince, getCompletedThoughtsSince, getStats } from "../lib/database.js";
+import { getThoughtsSince, getCompletedThoughtsSince, getStats, getUpcomingReminders } from "../lib/database.js";
 import type { ThoughtRow } from "../lib/types.js";
 
 // ── Azure OpenAI client ──────────────────────────────────────────────
@@ -149,6 +149,40 @@ function formatCompletedHtml(completed: ThoughtRow[]): string {
   return `<h3>Completed</h3><ul>${items}</ul>`;
 }
 
+function formatRemindersMarkdown(reminders: ThoughtRow[]): string {
+  if (reminders.length === 0) return "";
+  const items = reminders
+    .map((t) => {
+      const title = t.metadata?.reminder_title || t.metadata?.title || "Untitled";
+      const dt = t.metadata?.reminder_datetime
+        ? new Date(t.metadata.reminder_datetime as string).toLocaleString("en-US", {
+            weekday: "short", month: "short", day: "numeric",
+            hour: "numeric", minute: "2-digit", hour12: true,
+          })
+        : "no date";
+      return `- 📅 **${title}** — ${dt}`;
+    })
+    .join("\n");
+  return `\n\n**Upcoming Reminders:**\n${items}`;
+}
+
+function formatRemindersHtml(reminders: ThoughtRow[]): string {
+  if (reminders.length === 0) return "";
+  const items = reminders
+    .map((t) => {
+      const title = t.metadata?.reminder_title || t.metadata?.title || "Untitled";
+      const dt = t.metadata?.reminder_datetime
+        ? new Date(t.metadata.reminder_datetime as string).toLocaleString("en-US", {
+            weekday: "short", month: "short", day: "numeric",
+            hour: "numeric", minute: "2-digit", hour12: true,
+          })
+        : "no date";
+      return `<li>📅 <strong>${title}</strong> — ${dt}</li>`;
+    })
+    .join("");
+  return `<h3>Upcoming Reminders</h3><ul>${items}</ul>`;
+}
+
 // ── Daily Digest ─────────────────────────────────────────────────────
 
 async function dailyDigest(req: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
@@ -161,12 +195,13 @@ async function dailyDigest(req: HttpRequest, context: InvocationContext): Promis
   const since = new Date();
   since.setHours(since.getHours() - 24);
 
-  const [thoughts, completed] = await Promise.all([
+  const [thoughts, completed, reminders] = await Promise.all([
     getThoughtsSince(since),
     getCompletedThoughtsSince(since, 3),
+    getUpcomingReminders(48),
   ]);
 
-  if (thoughts.length === 0 && completed.length === 0) {
+  if (thoughts.length === 0 && completed.length === 0 && reminders.length === 0) {
     return {
       status: 200,
       jsonBody: { skipped: true, reason: "No thoughts captured in the last 24 hours." },
@@ -184,16 +219,18 @@ async function dailyDigest(req: HttpRequest, context: InvocationContext): Promis
   const title = `🧠 Daily Brain Digest — ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}`;
   const completedMd = formatCompletedMarkdown(completed);
   const completedHtml = formatCompletedHtml(completed);
+  const remindersMd = formatRemindersMarkdown(reminders);
+  const remindersHtml = formatRemindersHtml(reminders);
   const thoughtListMd = formatThoughtList(activeThoughts);
   const thoughtListHtml = formatThoughtListHtml(activeThoughts);
-  const fullMarkdown = `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** captured today${completedMd}\n\n${summary}\n\n---\n${thoughtListMd}`;
+  const fullMarkdown = `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** captured today${completedMd}${remindersMd}\n\n${summary}\n\n---\n${thoughtListMd}`;
   // Teams messages have a ~28KB limit — truncate if needed, keeping summary intact
   const MAX_TEAMS_LENGTH = 24000;
   const bodyMarkdown = fullMarkdown.length > MAX_TEAMS_LENGTH
-    ? `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** captured today${completedMd}\n\n${summary}\n\n---\n*(${activeThoughts.length} thoughts — full list in email)*`
+    ? `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** captured today${completedMd}${remindersMd}\n\n${summary}\n\n---\n*(${activeThoughts.length} thoughts — full list in email)*`
     : fullMarkdown;
   // Email has no practical size limit — always include full list
-  const bodyHtml = `<h2>${title}</h2><p><strong>${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}</strong> captured today</p>${completedHtml}${summary ? markdownToHtml(summary) : ""}<hr>${thoughtListHtml}`;
+  const bodyHtml = `<h2>${title}</h2><p><strong>${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}</strong> captured today</p>${completedHtml}${remindersHtml}${summary ? markdownToHtml(summary) : ""}<hr>${thoughtListHtml}`;
 
   return {
     status: 200,
@@ -225,13 +262,14 @@ async function weeklyDigest(req: HttpRequest, context: InvocationContext): Promi
   const since = new Date();
   since.setDate(since.getDate() - 7);
 
-  const [thoughts, completed, stats] = await Promise.all([
+  const [thoughts, completed, stats, reminders] = await Promise.all([
     getThoughtsSince(since),
     getCompletedThoughtsSince(since, 5),
     getStats(),
+    getUpcomingReminders(168),
   ]);
 
-  if (thoughts.length === 0 && completed.length === 0) {
+  if (thoughts.length === 0 && completed.length === 0 && reminders.length === 0) {
     return {
       status: 200,
       jsonBody: { skipped: true, reason: "No thoughts captured this week." },
@@ -254,12 +292,14 @@ async function weeklyDigest(req: HttpRequest, context: InvocationContext): Promi
 
   const completedMd = formatCompletedMarkdown(completed);
   const completedHtml = formatCompletedHtml(completed);
-  const fullMarkdown = `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** this week (${typeSummary})\n**${stats.total_thoughts} total** in your brain${completedMd}\n\n${summary}`;
+  const remindersMd = formatRemindersMarkdown(reminders);
+  const remindersHtml = formatRemindersHtml(reminders);
+  const fullMarkdown = `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** this week (${typeSummary})\n**${stats.total_thoughts} total** in your brain${completedMd}${remindersMd}\n\n${summary}`;
   const MAX_TEAMS_LENGTH = 24000;
   const bodyMarkdown = fullMarkdown.length > MAX_TEAMS_LENGTH
-    ? `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** this week (${typeSummary})\n**${stats.total_thoughts} total** in your brain${completedMd}\n\n*(Full summary in email)*`
+    ? `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** this week (${typeSummary})\n**${stats.total_thoughts} total** in your brain${completedMd}${remindersMd}\n\n*(Full summary in email)*`
     : fullMarkdown;
-  const bodyHtml = `<h2>${title}</h2><p><strong>${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}</strong> this week (${typeSummary})<br><strong>${stats.total_thoughts} total</strong> in your brain</p>${completedHtml}${summary ? markdownToHtml(summary) : ""}`;
+  const bodyHtml = `<h2>${title}</h2><p><strong>${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}</strong> this week (${typeSummary})<br><strong>${stats.total_thoughts} total</strong> in your brain</p>${completedHtml}${remindersHtml}${summary ? markdownToHtml(summary) : ""}`;
 
   return {
     status: 200,

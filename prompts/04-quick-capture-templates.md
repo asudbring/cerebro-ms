@@ -1,6 +1,6 @@
 # Prompt 4: Quick Capture Templates
 
-Seven patterns for capturing thoughts, completing tasks, and reopening items. Each one is optimized for clean metadata extraction in your Open Brain's processing pipeline.
+Eight patterns for capturing thoughts, completing tasks, reopening items, and setting reminders. Each one is optimized for clean metadata extraction in your Open Brain's processing pipeline.
 
 ## When to Use
 
@@ -136,3 +136,22 @@ undo: the dashboard redesign
 **Why it works:** The `reopen:` prefix triggers a search against completed tasks, finds the closest match, and sets it back to open.
 
 **Supported prefixes:** `reopen:`, `undo:`, `not done:`, `re-open:`
+
+---
+
+## 8. Set a Reminder 📅
+
+**Template:**
+```
+remind me to [action] by [date/time]
+```
+
+**Examples:**
+```
+remind me to submit the TPS report by Friday at 3pm
+I need to follow up with Sarah about the budget review next Tuesday at 10am
+remember to renew the SSL cert before March 15
+don't forget: team standup prep tomorrow 8:30am
+```
+
+**Why it works:** The AI detects time/date references and extracts a reminder title + datetime. The function returns `has_reminder: true` with the details, and Power Automate creates an Outlook calendar event (15-min, shows as Free, 24-hour advance reminder). If no time is specified, it defaults to 09:00 Central Time.

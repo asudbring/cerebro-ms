@@ -8,10 +8,10 @@ A personal knowledge base built on Azure. Captures thoughts via Microsoft Teams,
 
 Four serverless functions (Azure Functions, TypeScript) connected to one database:
 
-- **ingest-thought**: Power Automate HTTP POST → validate API key → embed + extract metadata in parallel → detect completion/reopen intent → insert to PostgreSQL → return reply JSON
+- **ingest-thought**: Power Automate HTTP POST → validate API key → embed + extract metadata in parallel → detect completion/reopen intent → extract reminder info → insert to PostgreSQL → return reply JSON
 - **open-brain-mcp**: MCP server with 4 tools (search_thoughts, browse_recent, brain_stats, capture_thought) → access key auth → query PostgreSQL
-- **daily-digest**: HTTP GET → query last 24h thoughts + completed tasks → AI-generate summary → return JSON for Power Automate to post to Teams + email
-- **weekly-digest**: HTTP GET → query last 7 days thoughts + completed tasks → AI-generate theme analysis → return JSON for Power Automate
+- **daily-digest**: HTTP GET → query last 24h thoughts + completed tasks + upcoming reminders (48h) → AI-generate summary → return JSON for Power Automate to post to Teams + email
+- **weekly-digest**: HTTP GET → query last 7 days thoughts + completed tasks + upcoming reminders (7 days) → AI-generate theme analysis → return JSON for Power Automate
 
 Shared library in `lib/`:
 - `azure-openai.ts` — embedding generation + metadata extraction via Azure OpenAI SDK
@@ -37,6 +37,8 @@ func azure functionapp publish open-brain-func --node  # deploy to Azure
 - **Digest summaries are truncated for Teams.** The `summary` field (markdown for Teams) is capped at ~24KB. If the full content exceeds this, the thought list is omitted from Teams and only included in the `summaryHtml` field for email.
 - **Task completion uses semantic matching.** When `done:` prefix or AI-detected completion intent is found, the ingest function generates an embedding and searches for the closest open task by vector similarity.
 - **Reopen uses the same pattern.** `reopen:` prefix triggers a search against done tasks.
+- **Reminder extraction is AI-driven.** If the thought mentions a time/date, the AI extracts `has_reminder`, `reminder_title`, and `reminder_datetime` (ISO 8601). Power Automate creates an Outlook calendar event (15-min, Free, 24-hour advance reminder). Default time is 09:00 if only a date is given. Timezone is Central Time (-06:00).
+- **Digests include upcoming reminders.** Daily digest shows reminders due in the next 48 hours; weekly shows the next 7 days. Reminder data is queried from the `metadata` JSONB column in the thoughts table.
 - **Access key validation** on both ingest and MCP endpoints accepts both `x-brain-key` header and `?key=` query param. Always check both.
 - **The vector dimension is 1536** (text-embedding-3-small). If you swap embedding models, update the dimension in `02-create-thoughts-table.sql`, `03-create-search-function.sql`, and the HNSW index.
 - **SQL scripts in `infra/database/` are numbered and run sequentially** (01 through 05). They're idempotent (`IF NOT EXISTS` / `CREATE OR REPLACE`).

@@ -19,6 +19,9 @@ export interface ThoughtMetadata {
   action_items?: string[];
   tags?: string[];
   source?: string;
+  has_reminder?: boolean;
+  reminder_title?: string;
+  reminder_datetime?: string;
   [key: string]: unknown;
 }
 

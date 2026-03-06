@@ -195,6 +195,25 @@ export async function getCompletedThoughtsSince(
 }
 
 /**
+ * Get upcoming reminders within a time window.
+ */
+export async function getUpcomingReminders(
+  withinHours: number = 48
+): Promise<ThoughtRow[]> {
+  const db = getPool();
+  const result = await db.query<ThoughtRow>(
+    `SELECT id, content, metadata, status, created_at, updated_at
+     FROM thoughts
+     WHERE metadata->>'has_reminder' = 'true'
+       AND metadata->>'reminder_datetime' IS NOT NULL
+       AND (metadata->>'reminder_datetime')::timestamptz > NOW()
+       AND (metadata->>'reminder_datetime')::timestamptz <= NOW() + INTERVAL '${withinHours} hours'
+     ORDER BY (metadata->>'reminder_datetime')::timestamptz ASC`
+  );
+  return result.rows;
+}
+
+/**
  * Get brain stats overview.
  */
 export async function getStats(): Promise<BrainStats> {

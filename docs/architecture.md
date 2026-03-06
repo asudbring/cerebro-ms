@@ -91,8 +91,8 @@ Reopening works the same way — `reopen:` searches done tasks and sets them bac
 - **Trigger:** HTTP POST from Power Automate
 - **Validates:** API key via header or query param
 - **Loop guard:** Rejects messages that match bot reply patterns (prevents infinite loops if Power Automate re-triggers on its own replies)
-- **Does:** Strip @mention → embed + classify in parallel → detect completion/reopen → insert to DB → return reply JSON
-- **Returns:** JSON with reply text, type, title, and markedDone/reopened ID (or `skipped: true` if loop guard triggered)
+- **Does:** Strip @mention → embed + classify in parallel → detect completion/reopen → extract reminder info → insert to DB → return reply JSON
+- **Returns:** JSON with reply text, type, title, markedDone/reopened ID, and reminder fields (has_reminder, reminder_title, reminder_datetime) — or `skipped: true` if loop guard triggered
 
 ### open-brain-mcp
 - **Trigger:** HTTP POST/GET with access key auth
@@ -102,12 +102,12 @@ Reopening works the same way — `reopen:` searches done tasks and sets them bac
 
 ### daily-digest
 - **Trigger:** HTTP GET from Power Automate (scheduled daily)
-- **Does:** Query last 24h thoughts + completed tasks → AI-generate summary → return JSON
+- **Does:** Query last 24h thoughts + completed tasks + upcoming reminders (next 48h) → AI-generate summary → return JSON
 - **Returns:** title, summary (markdown for Teams, truncated to fit Teams' ~28KB message limit), summaryHtml (full content for email), thoughtCount
 
 ### weekly-digest
 - **Trigger:** HTTP GET from Power Automate (scheduled weekly)
-- **Does:** Query last 7 days → AI-generate theme analysis + open loops → return JSON
+- **Does:** Query last 7 days + upcoming reminders (next 7 days) → AI-generate theme analysis + open loops → return JSON
 - **Returns:** Same format as daily, plus totalThoughts count
 
 ## Security Model
