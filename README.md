@@ -251,7 +251,7 @@ az functionapp create \
   --runtime node \
   --runtime-version 20 \
   --functions-version 4 \
-  --name open-brain-functions \
+  --name open-brain-func \
   --storage-account openbrainstorage
 ```
 
@@ -271,7 +271,7 @@ Copy the 64-character hex string into your credential tracker as `MCP_ACCESS_KEY
 
 ```bash
 az functionapp config appsettings set \
-  --name open-brain-functions \
+  --name open-brain-func \
   --resource-group open-brain-rg \
   --settings \
     AZURE_OPENAI_ENDPOINT="https://open-brain-ai.openai.azure.com" \
@@ -286,15 +286,15 @@ az functionapp config appsettings set \
 
 ```bash
 cd functions
-func azure functionapp publish open-brain-functions --node
+func azure functionapp publish open-brain-func --node
 cd ..
 ```
 
 Your function URLs will be:
-- **Ingest:** `https://open-brain-functions.azurewebsites.net/api/ingest-thought`
-- **MCP:** `https://open-brain-functions.azurewebsites.net/api/open-brain-mcp`
-- **Daily Digest:** `https://open-brain-functions.azurewebsites.net/api/daily-digest`
-- **Weekly Digest:** `https://open-brain-functions.azurewebsites.net/api/weekly-digest`
+- **Ingest:** `https://open-brain-func.azurewebsites.net/api/ingest-thought`
+- **MCP:** `https://open-brain-func.azurewebsites.net/api/open-brain-mcp`
+- **Daily Digest:** `https://open-brain-func.azurewebsites.net/api/daily-digest`
+- **Weekly Digest:** `https://open-brain-func.azurewebsites.net/api/weekly-digest`
 
 ## Step 4: Set Up Power Automate Capture Flow
 
@@ -461,13 +461,13 @@ Test by posting a screenshot in your capture channel. You should see a reply wit
 The MCP server was already deployed in Step 3. Your MCP server URL is:
 
 ```
-https://open-brain-functions.azurewebsites.net/api/open-brain-mcp
+https://open-brain-func.azurewebsites.net/api/open-brain-mcp
 ```
 
 Build your MCP Connection URL by adding the access key:
 
 ```
-https://open-brain-functions.azurewebsites.net/api/open-brain-mcp?key=your-access-key
+https://open-brain-func.azurewebsites.net/api/open-brain-mcp?key=your-access-key
 ```
 
 Save this in your credential tracker as `MCP_CONNECTION_URL`.
@@ -475,7 +475,7 @@ Save this in your credential tracker as `MCP_CONNECTION_URL`.
 Verify it works:
 
 ```bash
-curl "https://open-brain-functions.azurewebsites.net/api/open-brain-mcp?key=your-access-key"
+curl "https://open-brain-func.azurewebsites.net/api/open-brain-mcp?key=your-access-key"
 ```
 
 You should get a JSON response with status "ok" and the 4 tool names.
@@ -523,7 +523,7 @@ Add to your VS Code user `settings.json`:
 
 ```bash
 claude mcp add --transport http open-brain \
-  https://open-brain-functions.azurewebsites.net/api/open-brain-mcp \
+  https://open-brain-func.azurewebsites.net/api/open-brain-mcp \
   --header "x-brain-key: your-access-key"
 ```
 
@@ -540,7 +540,7 @@ claude mcp add --transport http open-brain \
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://open-brain-functions.azurewebsites.net/api/open-brain-mcp",
+        "https://open-brain-func.azurewebsites.net/api/open-brain-mcp",
         "--header",
         "x-brain-key:${BRAIN_KEY}"
       ],

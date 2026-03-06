@@ -20,12 +20,16 @@ AZURE_OPENAI_ENDPOINT=             # e.g., https://open-brain-ai.openai.azure.co
 AZURE_OPENAI_API_KEY=              # from az cognitiveservices account keys list
 EMBEDDING_DEPLOYMENT=text-embedding-3-small
 CHAT_DEPLOYMENT=gpt-4o-mini
+VISION_DEPLOYMENT=gpt-4o           # used for image analysis in file capture
 
 # --- Azure Functions (Step 3) ---
 FUNCTION_APP_NAME=                 # e.g., open-brain-func
 INGEST_FUNCTION_URL=               # e.g., https://open-brain-func.azurewebsites.net/api/ingest-thought
 DAILY_DIGEST_URL=                  # e.g., https://open-brain-func.azurewebsites.net/api/daily-digest
 WEEKLY_DIGEST_URL=                 # e.g., https://open-brain-func.azurewebsites.net/api/weekly-digest
+
+# --- Azure Blob Storage (for file attachments) ---
+AZURE_STORAGE_CONNECTION_STRING=   # from az storage account show-connection-string
 
 # --- MCP Access Key (Step 5) ---
 MCP_ACCESS_KEY=                    # 64-character hex string from openssl rand -hex 32
