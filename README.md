@@ -326,7 +326,8 @@ Power Automate connects Teams to your Azure Function. When you post a message in
      ```json
      {
        "text": "@{body('Get_message_details')?['body']?['plainTextContent']}",
-       "from": "@{body('Get_message_details')?['from']?['user']?['displayName']}"
+       "from": "@{body('Get_message_details')?['from']?['user']?['displayName']}",
+       "attachments": @{body('Get_message_details')?['attachments']}
      }
      ```
 
@@ -343,7 +344,12 @@ Power Automate connects Teams to your Azure Function. When you post a message in
          "title": { "type": "string" },
          "markedDone": { "type": ["string", "null"] },
          "skipped": { "type": "boolean" },
-         "reason": { "type": "string" }
+         "reason": { "type": "string" },
+         "has_reminder": { "type": "boolean" },
+         "reminder_title": { "type": ["string", "null"] },
+         "reminder_datetime": { "type": ["string", "null"] },
+         "has_file": { "type": "boolean" },
+         "file_url": { "type": ["string", "null"] }
        }
      }
      ```
@@ -429,26 +435,7 @@ A calendar event will appear in your Outlook calendar (15-minute event, shown as
 
 ### File Capture (Images, PDFs, Docs)
 
-To capture file attachments posted in your Teams channel, update the **HTTP** action body in your capture flow:
-
-1. Open your **Open Brain — Capture** flow → **Edit**
-2. Click the **HTTP** action
-3. Replace the **Body** with:
-   ```json
-   {
-     "text": "@{body('Get_message_details')?['body']?['plainTextContent']}",
-     "from": "@{body('Get_message_details')?['from']?['user']?['displayName']}",
-     "attachments": @{body('Get_message_details')?['attachments']}
-   }
-   ```
-4. **Update the Parse JSON schema** to include file fields:
-   ```json
-   "has_file": { "type": "boolean" },
-   "file_url": { "type": ["string", "null"] }
-   ```
-5. **Save** and test by posting a screenshot in your capture channel
-
-The function will:
+The capture flow already includes `attachments` in the HTTP body (step 6 above). When you post a file in your capture channel, the function will:
 - Download the file from Teams
 - Upload it to Azure Blob Storage (`brain-files` container)
 - Analyze images with gpt-4o vision (description + OCR)
@@ -460,6 +447,8 @@ Supported file types:
 - **Word docs:** DOCX → text extraction
 - **PDFs:** Noted as attached (full text extraction planned for future update)
 - **Other files:** Stored and noted in metadata
+
+Test by posting a screenshot in your capture channel. You should see a reply with 📎 and a description of the image.
 
 **If capture works, Part 1 is done.**
 
