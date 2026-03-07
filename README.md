@@ -327,7 +327,7 @@ Power Automate connects Teams to your Azure Function. When you post a message in
      {
        "text": "@{body('Get_message_details')?['body']?['plainTextContent']}",
        "from": "@{body('Get_message_details')?['from']?['user']?['displayName']}",
-       "attachments": @{body('Get_message_details')?['attachments']}
+       "attachments": @{coalesce(body('Get_message_details')?['attachments'], json('[]'))}
      }
      ```
 
