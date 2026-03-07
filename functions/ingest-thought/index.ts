@@ -56,6 +56,23 @@ function stripBotMention(text: string): string {
 }
 
 /**
+ * Resolve MIME type from file extension (Teams sends "reference" for hosted files).
+ */
+function mimeFromExtension(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase() || "";
+  const map: Record<string, string> = {
+    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
+    pdf: "application/pdf",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    doc: "application/msword",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    txt: "text/plain", csv: "text/csv",
+  };
+  return map[ext] || "application/octet-stream";
+}
+
+/**
  * Format the captured metadata into a reply string.
  */
 function formatReply(metadata: Record<string, unknown>): string {
@@ -152,29 +169,46 @@ async function ingestThought(req: HttpRequest, context: InvocationContext): Prom
 
     if (hasAttachments) {
       const att = attachments[0]; // process first attachment
-      context.log(`Processing attachment: ${att.name} (${att.contentType})`);
+
+      // Detect actual MIME type — Teams sends "reference" for hosted files
+      const resolvedContentType = att.contentType === "reference"
+        ? mimeFromExtension(att.name)
+        : att.contentType;
+
+      context.log(`Processing attachment: ${att.name} (${resolvedContentType})`);
 
       try {
-        // Download the file from the provided URL
-        const downloadHeaders: Record<string, string> = { "Accept": "*/*" };
-        if (body.graphToken) {
-          downloadHeaders["Authorization"] = `Bearer ${body.graphToken}`;
-        }
-        const fileResponse = await fetch(att.contentUrl, { headers: downloadHeaders });
-        if (!fileResponse.ok) {
-          context.warn(`Failed to download attachment: ${fileResponse.status} ${fileResponse.statusText}`);
-        } else {
-          const fileBuffer = Buffer.from(await fileResponse.arrayBuffer());
-          context.log(`Downloaded ${att.name}: ${fileBuffer.length} bytes`);
+        let fileBuffer: Buffer | null = null;
 
+        // Prefer base64 content passed by Power Automate (avoids auth issues with SharePoint URLs)
+        if (body.fileContent) {
+          const base64Data = (body.fileContent as string).replace(/^data:[^;]+;base64,/, "");
+          fileBuffer = Buffer.from(base64Data, "base64");
+          context.log(`Received file via base64: ${fileBuffer.length} bytes`);
+        } else if (att.contentUrl) {
+          // Fallback: try direct download (works for public URLs)
+          const downloadHeaders: Record<string, string> = { "Accept": "*/*" };
+          if (body.graphToken) {
+            downloadHeaders["Authorization"] = `Bearer ${body.graphToken}`;
+          }
+          const fileResponse = await fetch(att.contentUrl, { headers: downloadHeaders });
+          if (fileResponse.ok) {
+            fileBuffer = Buffer.from(await fileResponse.arrayBuffer());
+            context.log(`Downloaded ${att.name}: ${fileBuffer.length} bytes`);
+          } else {
+            context.warn(`Failed to download attachment: ${fileResponse.status} ${fileResponse.statusText}`);
+          }
+        }
+
+        if (fileBuffer) {
           // Upload to blob storage and analyze in parallel
           const [uploadResult, analysis] = await Promise.all([
-            uploadFile(fileBuffer, att.name, att.contentType),
-            analyzeFile(fileBuffer, att.contentType, att.name),
+            uploadFile(fileBuffer, att.name, resolvedContentType),
+            analyzeFile(fileBuffer, resolvedContentType, att.name),
           ]);
 
           fileUrl = generateSasUrl(uploadResult.blobName);
-          fileType = att.contentType;
+          fileType = resolvedContentType;
           fileAnalysis = analysis;
           context.log(`File uploaded: ${uploadResult.blobName}, analysis: ${analysis.fileType}`);
         }
