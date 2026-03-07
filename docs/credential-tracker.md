@@ -31,6 +31,11 @@ WEEKLY_DIGEST_URL=                 # e.g., https://open-brain-func.azurewebsites
 # --- Azure Blob Storage (for file attachments) ---
 AZURE_STORAGE_CONNECTION_STRING=   # from az storage account show-connection-string
 
+# --- Entra ID App Registration (for downloading Teams/SharePoint files) ---
+GRAPH_TENANT_ID=                   # your Entra ID tenant (e.g., contoso.onmicrosoft.com tenant GUID)
+GRAPH_CLIENT_ID=                   # app registration client/application ID
+GRAPH_CLIENT_SECRET=               # app registration client secret (expires in 2 years)
+
 # --- MCP Access Key (Step 5) ---
 MCP_ACCESS_KEY=                    # 64-character hex string from openssl rand -hex 32
 

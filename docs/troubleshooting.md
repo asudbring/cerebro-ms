@@ -162,9 +162,18 @@ Azure Database for PostgreSQL Flexible Server supports pgvector natively. If `CR
 
 ### File not being captured from Teams message
 
-- Verify the HTTP action body includes the `attachments` field: `"attachments": @{body('Get_message_details')?['attachments']}`
-- Check that the Teams message actually has an attachment (inline images in rich text may not appear as attachments)
-- Try uploading the file as a proper attachment rather than pasting it inline
+- Use `coalesce(body('Get_message_details')?['attachments'], json('[]'))` in the HTTP body (bare `null` breaks JSON)
+- Teams file attachments have `contentType: "reference"` (not the actual MIME type) — the function resolves MIME from the file extension
+- The function downloads files via Graph API using client credentials — verify `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET` are set in function app settings
+- The Entra ID app registration needs `Sites.Read.All` application permission with admin consent granted
+- Check function logs for "Failed to get site" or "Failed to download file via Graph" messages
+
+### 403 or 401 downloading SharePoint files
+
+- Teams stores uploaded files on SharePoint — direct download requires auth
+- The function uses an Entra ID app registration to get a Graph API token
+- Verify admin consent was granted: check the app's "API permissions" in Entra ID portal — should show a green checkmark next to Sites.Read.All
+- If the token has no roles, the service principal may not exist: run `az ad sp create --id <app-id>` then re-grant consent via `az rest --method POST` to the appRoleAssignments endpoint
 
 ### File uploaded but no AI analysis
 
