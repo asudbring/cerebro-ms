@@ -145,7 +145,9 @@ Azure Database for PostgreSQL Flexible Server supports pgvector natively. If `CR
 
 ### Reminder date/time is wrong
 
-- The AI extracts dates relative to the current time (injected at runtime). Check if the function's timezone offset is correct (currently -06:00 Central Time)
+- The AI resolves relative dates ("Monday", "next Friday") using the current date/time injected at runtime in Central Time with the day of week included (e.g., "Friday, 2026-03-06T19:28:00.000-06:00")
+- If the day of week is missing from the prompt, the AI may pick the wrong date — ensure `buildMetadataPrompt()` in `azure-openai.ts` includes it
+- The function runs in UTC but converts to Central Time (-06:00) before injecting — if UTC midnight crosses a day boundary, the injected day of week could be wrong without this conversion
 - If only a date is given with no time, it defaults to 09:00
 - Try being more explicit: "remind me Friday March 14 at 2:30pm" instead of "remind me next week"
 
