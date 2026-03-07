@@ -58,14 +58,22 @@ Rules:
 6. Set is_completion to true if the thought reports finishing/completing a previous task. Keywords include: "done", "completed", "finished", "shipped", "wrapped up", "closed out", "checked off". Both explicit ("done: vnet docs") and natural ("finally finished the vnet troubleshooting docs") count.
 7. When is_completion is true, set completion_description to a short phrase describing WHAT was completed (without the "done"/"completed" prefix).
 8. Set has_reminder to true if the thought asks to be reminded, schedule something, or has a deadline/time. Keywords include: "remind me", "don't forget", "remember to", "by [date/time]", "before [date]", "follow up", "due", "deadline", "schedule". Phrases like "I need to do X by Friday" count.
-9. When has_reminder is true, set reminder_title to a short action phrase (e.g., "Submit TPS report"), and set reminder_datetime to an ISO 8601 datetime string. Use the current date (provided below) to resolve relative dates like "tomorrow", "next Tuesday", "Friday". If only a date is given with no time, default to 09:00. Always use the timezone offset -06:00 (Central Time).
+9. When has_reminder is true, set reminder_title to a short action phrase (e.g., "Submit TPS report"), and set reminder_datetime to an ISO 8601 datetime string. Use the current date and day of week (provided below) to resolve relative dates like "tomorrow", "next Tuesday", "Friday", "Monday". IMPORTANT: "Monday" means the NEXT upcoming Monday from the current date — calculate the correct date by counting forward from the current day of week. If only a date is given with no time, default to 09:00. Always use the timezone offset -06:00 (Central Time).
 10. Current date/time for resolving relative dates: PROVIDED_AT_RUNTIME`;
 
 /**
  * Build the metadata prompt with current date injected.
  */
 function buildMetadataPrompt(): string {
-  return METADATA_SYSTEM_PROMPT.replace("PROVIDED_AT_RUNTIME", new Date().toISOString());
+  // Use Central Time (-06:00) for date context since that's the user's timezone
+  const now = new Date();
+  const centralOffset = -6 * 60; // minutes
+  const centralTime = new Date(now.getTime() + (centralOffset + now.getTimezoneOffset()) * 60000);
+  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const dayName = days[centralTime.getDay()];
+  const isoWithOffset = centralTime.toISOString().replace("Z", "-06:00");
+  const dateStr = `${dayName}, ${isoWithOffset}`;
+  return METADATA_SYSTEM_PROMPT.replace("PROVIDED_AT_RUNTIME", dateStr);
 }
 
 /**
