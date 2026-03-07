@@ -119,11 +119,14 @@ async function ingestThought(req: HttpRequest, context: InvocationContext): Prom
 
   // Extract text — support multiple field names PA might send
   let rawText = (body.text as string) || (body.message as string) || (body.content as string) || "";
-  if (!rawText) {
-    return { status: 400, jsonBody: { error: "text is required", receivedKeys: Object.keys(body) } };
+  const attachments = body.attachments as Array<{ name: string; contentUrl: string; contentType: string }> | undefined;
+  const hasAttachments = attachments && attachments.length > 0;
+
+  if (!rawText && !hasAttachments) {
+    return { status: 400, jsonBody: { error: "text or attachments required", receivedKeys: Object.keys(body) } };
   }
 
-  const cleanText = stripBotMention(rawText);
+  const cleanText = stripBotMention(rawText) || (hasAttachments ? "(file attachment)" : "");
   if (!cleanText) {
     return { status: 400, jsonBody: { error: "Empty message after processing" } };
   }
@@ -143,12 +146,11 @@ async function ingestThought(req: HttpRequest, context: InvocationContext): Prom
 
   try {
     // Process attachments if present
-    const attachments = body.attachments as Array<{ name: string; contentUrl: string; contentType: string }> | undefined;
     let fileAnalysis: FileAnalysisResult | null = null;
     let fileUrl: string | null = null;
     let fileType: string | null = null;
 
-    if (attachments && attachments.length > 0) {
+    if (hasAttachments) {
       const att = attachments[0]; // process first attachment
       context.log(`Processing attachment: ${att.name} (${att.contentType})`);
 
