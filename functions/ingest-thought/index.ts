@@ -73,6 +73,79 @@ function mimeFromExtension(filename: string): string {
 }
 
 /**
+ * Get a Graph API access token using client credentials.
+ */
+async function getGraphToken(): Promise<string | null> {
+  const tenantId = process.env.GRAPH_TENANT_ID;
+  const clientId = process.env.GRAPH_CLIENT_ID;
+  const clientSecret = process.env.GRAPH_CLIENT_SECRET;
+  if (!tenantId || !clientId || !clientSecret) return null;
+
+  const resp = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      scope: "https://graph.microsoft.com/.default",
+      grant_type: "client_credentials",
+    }),
+  });
+  if (!resp.ok) return null;
+  const data = await resp.json() as { access_token?: string };
+  return data.access_token || null;
+}
+
+/**
+ * Download a file from a SharePoint contentUrl via Graph API.
+ * Converts SharePoint URL to Graph API path and follows redirects.
+ */
+async function downloadViaGraph(contentUrl: string, context: InvocationContext): Promise<Buffer | null> {
+  const token = await getGraphToken();
+  if (!token) {
+    context.warn("Graph API credentials not configured — cannot download SharePoint files");
+    return null;
+  }
+
+  // Parse SharePoint URL: https://tenant.sharepoint.com/sites/SiteName/Shared Documents/path/file.ext
+  const match = contentUrl.match(/https:\/\/([^/]+)\/sites\/([^/]+)\/Shared%20Documents\/(.+)|https:\/\/([^/]+)\/sites\/([^/]+)\/Shared Documents\/(.+)/);
+  if (!match) {
+    context.warn(`Cannot parse SharePoint URL: ${contentUrl}`);
+    // Try direct download as fallback
+    const resp = await fetch(contentUrl);
+    return resp.ok ? Buffer.from(await resp.arrayBuffer()) : null;
+  }
+
+  const hostname = match[1] || match[4];
+  const siteName = match[2] || match[5];
+  const filePath = encodeURIComponent(match[3] || match[6]).replace(/%2F/g, "/");
+
+  // First get the site ID
+  const siteResp = await fetch(`https://graph.microsoft.com/v1.0/sites/${hostname}:/sites/${siteName}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!siteResp.ok) {
+    context.warn(`Failed to get site: ${siteResp.status}`);
+    return null;
+  }
+  const site = await siteResp.json() as { id: string };
+
+  // Download file content (follow redirect)
+  const fileResp = await fetch(
+    `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/root:/${filePath}:/content`,
+    { headers: { Authorization: `Bearer ${token}` }, redirect: "follow" },
+  );
+  if (!fileResp.ok) {
+    context.warn(`Failed to download file via Graph: ${fileResp.status}`);
+    return null;
+  }
+
+  const buffer = Buffer.from(await fileResp.arrayBuffer());
+  context.log(`Downloaded via Graph API: ${buffer.length} bytes`);
+  return buffer;
+}
+
+/**
  * Format the captured metadata into a reply string.
  */
 function formatReply(metadata: Record<string, unknown>): string {
@@ -180,24 +253,14 @@ async function ingestThought(req: HttpRequest, context: InvocationContext): Prom
       try {
         let fileBuffer: Buffer | null = null;
 
-        // Prefer base64 content passed by Power Automate (avoids auth issues with SharePoint URLs)
+        // Prefer base64 content passed by Power Automate
         if (body.fileContent) {
           const base64Data = (body.fileContent as string).replace(/^data:[^;]+;base64,/, "");
           fileBuffer = Buffer.from(base64Data, "base64");
           context.log(`Received file via base64: ${fileBuffer.length} bytes`);
         } else if (att.contentUrl) {
-          // Fallback: try direct download (works for public URLs)
-          const downloadHeaders: Record<string, string> = { "Accept": "*/*" };
-          if (body.graphToken) {
-            downloadHeaders["Authorization"] = `Bearer ${body.graphToken}`;
-          }
-          const fileResponse = await fetch(att.contentUrl, { headers: downloadHeaders });
-          if (fileResponse.ok) {
-            fileBuffer = Buffer.from(await fileResponse.arrayBuffer());
-            context.log(`Downloaded ${att.name}: ${fileBuffer.length} bytes`);
-          } else {
-            context.warn(`Failed to download attachment: ${fileResponse.status} ${fileResponse.statusText}`);
-          }
+          // Download via Graph API for SharePoint-hosted files
+          fileBuffer = await downloadViaGraph(att.contentUrl, context);
         }
 
         if (fileBuffer) {
