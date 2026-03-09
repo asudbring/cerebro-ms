@@ -6,29 +6,34 @@ A personal knowledge base built on Azure. Captures thoughts via Microsoft Teams,
 
 ## Architecture
 
-Four serverless functions (Azure Functions, TypeScript) connected to one database:
+Azure Functions v4 (TypeScript, Node 18+). `functions/app.ts` is the entry point — it imports all function modules, which self-register routes via `app.http()`. Four serverless functions connected to one database:
 
 - **ingest-thought**: Power Automate HTTP POST → validate API key → process file attachments (download, blob upload, AI analysis) → embed + extract metadata in parallel → detect completion/reopen intent → extract reminder info → insert to PostgreSQL → return reply JSON
 - **open-brain-mcp**: MCP server with 4 tools (search_thoughts, browse_recent, brain_stats, capture_thought) → access key auth → query PostgreSQL
 - **daily-digest**: HTTP GET → query last 24h thoughts + completed tasks + upcoming reminders (48h) → AI-generate summary → return JSON for Power Automate to post to Teams + email
 - **weekly-digest**: HTTP GET → query last 7 days thoughts + completed tasks + upcoming reminders (7 days) → AI-generate theme analysis → return JSON for Power Automate
 
-Shared library in `lib/`:
+Shared library in `functions/lib/`:
 - `azure-openai.ts` — embedding generation + metadata extraction via Azure OpenAI SDK
 - `database.ts` — PostgreSQL connection pool + all queries (insert, search, browse, stats, mark done, reopen)
 - `blob-storage.ts` — Azure Blob Storage upload + SAS URL generation for file attachments
 - `file-analysis.ts` — File analysis: gpt-4o vision for images, mammoth for DOCX, basic PDF handling
 - `types.ts` — shared TypeScript interfaces
 
+Key dependencies: `@azure/functions` v4 runtime, `@azure/openai` + `openai` for AI, `pg` for PostgreSQL, `@modelcontextprotocol/sdk` for MCP, `hono` for MCP HTTP transport, `zod` for schema validation, `mammoth` for DOCX extraction.
+
 ## Build and Deploy
 
 ```bash
 cd functions
 npm install          # install dependencies
-npm run build        # compile TypeScript
-npm run start        # local dev server (requires Azure Functions Core Tools)
+npm run build        # compile TypeScript (tsc)
+npm run watch        # compile in watch mode for development
+npm run start        # local dev server (auto-builds first via prestart hook; requires Azure Functions Core Tools)
 func azure functionapp publish open-brain-func --node  # deploy to Azure
 ```
+
+There is no test suite or linter configured. Do not attempt to run `npm test` or `npm run lint`.
 
 ## Key Conventions
 
@@ -44,7 +49,7 @@ func azure functionapp publish open-brain-func --node  # deploy to Azure
 - **File attachments are stored in Azure Blob Storage.** The `brain-files` container in `openbrainstorage` holds uploaded files. Images are analyzed by gpt-4o vision; DOCX files are parsed by mammoth. File URLs are SAS-protected (1-year expiry). The `file_url` and `file_type` columns in the thoughts table track file references.
 - **Teams file downloads use Graph API client credentials.** Teams stores uploaded files on SharePoint with auth-protected URLs. The function uses an Entra ID app registration (GRAPH_TENANT_ID/CLIENT_ID/SECRET) with Sites.Read.All to download files. The `contentUrl` from Teams has `contentType: "reference"` — actual MIME type is resolved from the file extension.
 - **Environment variables** for Graph API: `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET` — set on the function app, pointing to an app registration in the Entra ID tenant where SharePoint lives.
-- **Access key validation** on both ingest and MCP endpoints accepts both `x-brain-key` header and `?key=` query param. Always check both.
+- **Access key validation** on both ingest and MCP endpoints accepts both `x-brain-key` header and `?key=` query param. Always check both. The ingest endpoint checks `INGEST_API_KEY` first, falling back to `MCP_ACCESS_KEY` if unset.
 - **The vector dimension is 1536** (text-embedding-3-small). If you swap embedding models, update the dimension in `02-create-thoughts-table.sql`, `03-create-search-function.sql`, and the HNSW index.
 - **SQL scripts in `infra/database/` are numbered and run sequentially** (01 through 06). They're idempotent (`IF NOT EXISTS` / `CREATE OR REPLACE`).
 - **The thoughts table has a `status` column** — `'open'` (default) or `'done'`. Digests filter by status to separate active thoughts from completed tasks.
