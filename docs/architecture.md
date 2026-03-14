@@ -2,7 +2,7 @@
 
 ## Overview
 
-Open Brain (Microsoft Edition) is a personal knowledge base built on Azure. It captures raw thoughts via Microsoft Teams (through Power Automate), generates vector embeddings with Azure OpenAI, stores everything in PostgreSQL with pgvector, and exposes an MCP server so any AI assistant can search and write to your brain.
+Cerebro (Microsoft Edition) is a personal knowledge base built on Azure. It captures raw thoughts via Microsoft Teams (through Power Automate), generates vector embeddings with Azure OpenAI, stores everything in PostgreSQL with pgvector, and exposes an MCP server so any AI assistant can search and write to your cerebro.
 
 The architecture has three parts: **capture** (thoughts in), **retrieval** (thoughts out), and **digests** (automated summaries).
 
@@ -29,7 +29,7 @@ The architecture has three parts: **capture** (thoughts in), **retrieval** (thou
                          RETRIEVAL PATH        │    │         DIGEST PATH
 ┌────────────┐     ┌──────────────────┐        │    │   ┌──────────────────┐
 │ Any AI:    │────▶│ Azure Function:  │────────┘    └──▶│ Azure Function:  │
-│ Claude,    │     │ open-brain-mcp   │                 │ daily/weekly     │
+│ Claude,    │     │ cerebro-mcp      │                 │ daily/weekly     │
 │ ChatGPT,   │     │ (MCP server)     │                 │ digest           │
 │ Copilot... │     └──────────────────┘                 └──────────────────┘
 └────────────┘                                                  │
@@ -94,10 +94,10 @@ Reopening works the same way — `reopen:` searches done tasks and sets them bac
 - **Does:** Strip @mention → process attachments (download, upload to blob, analyze) → embed + classify in parallel → detect completion/reopen → extract reminder info → insert to DB → return reply JSON
 - **Returns:** JSON with reply text, type, title, markedDone/reopened ID, reminder fields, and file fields (has_file, file_url) — or `skipped: true` if loop guard triggered
 
-### open-brain-mcp
+### cerebro-mcp
 - **Trigger:** HTTP POST/GET with access key auth
 - **Protocol:** JSON-RPC (MCP standard)
-- **Tools:** search_thoughts, browse_recent, brain_stats, capture_thought
+- **Tools:** search_thoughts, browse_recent, cerebro_stats, capture_thought
 - **Returns:** MCP-formatted responses that AI clients understand
 
 ### daily-digest

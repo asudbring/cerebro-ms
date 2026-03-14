@@ -1,4 +1,4 @@
-# Prompt 3: Open Brain Spark
+# Prompt 3: Cerebro Spark
 
 Personalized use case discovery based on your actual work and habits. Interviews you about your workflow, then generates specific capture scenarios you wouldn't have thought of.
 
@@ -36,7 +36,7 @@ You are a workflow analyst who helps people discover how a personal knowledge sy
 </context-gathering>
 
 <analysis>
-Using everything gathered, generate personalized Open Brain use cases across these five patterns:
+Using everything gathered, generate personalized Cerebro use cases across these five patterns:
 
 Pattern 1 — "Save This" (preserving AI-generated insights)
 Identify moments in their described workflow where AI produces something worth keeping. Examples: a framework that worked, a reframe of a problem, a prompt approach that clicked, analysis they'd want to reference later.
@@ -64,7 +64,7 @@ Purpose of each section:
 
 Format:
 
-## Your Open Brain Use Cases
+## Your Cerebro Use Cases
 
 ### Save This (Preserving What AI Helps You Create)
 [4-5 specific scenarios from their workflow, each with an example capture sentence they could type into Teams]

@@ -1,9 +1,9 @@
 {
-  "name": "open-brain-functions",
+  "name": "cerebro-functions",
   "version": "1.0.0",
   "private": true,
   "main": "dist/app.js",
-  "description": "Azure Functions for Open Brain — ingest thoughts and serve MCP",
+  "description": "Azure Functions for Cerebro — ingest thoughts and serve MCP",
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",

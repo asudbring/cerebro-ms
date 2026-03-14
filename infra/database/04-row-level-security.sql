@@ -12,15 +12,15 @@
 -- Create the application role (run as the admin user)
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'open_brain_app') THEN
-        CREATE ROLE open_brain_app WITH LOGIN PASSWORD 'CHANGE_ME';
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'cerebro_app') THEN
+        CREATE ROLE cerebro_app WITH LOGIN PASSWORD 'CHANGE_ME';
     END IF;
 END
 $$;
 
 -- Grant access to the thoughts table
-GRANT USAGE ON SCHEMA public TO open_brain_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON thoughts TO open_brain_app;
+GRANT USAGE ON SCHEMA public TO cerebro_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON thoughts TO cerebro_app;
 
 -- Enable RLS
 ALTER TABLE thoughts ENABLE ROW LEVEL SECURITY;
@@ -29,7 +29,7 @@ ALTER TABLE thoughts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "App role full access"
     ON thoughts
     FOR ALL
-    TO open_brain_app
+    TO cerebro_app
     USING (true)
     WITH CHECK (true);
 

@@ -216,7 +216,7 @@ async function dailyDigest(req: HttpRequest, context: InvocationContext): Promis
     summary = await generateDigestSummary(activeThoughts, "daily");
   }
 
-  const title = `🧠 Daily Brain Digest — ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}`;
+  const title = `🧠 Daily Cerebro Digest — ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}`;
   const completedMd = formatCompletedMarkdown(completed);
   const completedHtml = formatCompletedHtml(completed);
   const remindersMd = formatRemindersMarkdown(reminders);
@@ -283,7 +283,7 @@ async function weeklyDigest(req: HttpRequest, context: InvocationContext): Promi
     summary = await generateDigestSummary(activeThoughts, "weekly");
   }
 
-  const title = `🧠 Weekly Brain Review — Week of ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  const title = `🧠 Weekly Cerebro Review — Week of ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
   const grouped = groupByType(activeThoughts);
   const typeSummary = Array.from(grouped.entries())
@@ -294,12 +294,12 @@ async function weeklyDigest(req: HttpRequest, context: InvocationContext): Promi
   const completedHtml = formatCompletedHtml(completed);
   const remindersMd = formatRemindersMarkdown(reminders);
   const remindersHtml = formatRemindersHtml(reminders);
-  const fullMarkdown = `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** this week (${typeSummary})\n**${stats.total_thoughts} total** in your brain${completedMd}${remindersMd}\n\n${summary}`;
+  const fullMarkdown = `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** this week (${typeSummary})\n**${stats.total_thoughts} total** in your cerebro${completedMd}${remindersMd}\n\n${summary}`;
   const MAX_TEAMS_LENGTH = 24000;
   const bodyMarkdown = fullMarkdown.length > MAX_TEAMS_LENGTH
-    ? `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** this week (${typeSummary})\n**${stats.total_thoughts} total** in your brain${completedMd}${remindersMd}\n\n*(Full summary in email)*`
+    ? `**${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}** this week (${typeSummary})\n**${stats.total_thoughts} total** in your cerebro${completedMd}${remindersMd}\n\n*(Full summary in email)*`
     : fullMarkdown;
-  const bodyHtml = `<h2>${title}</h2><p><strong>${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}</strong> this week (${typeSummary})<br><strong>${stats.total_thoughts} total</strong> in your brain</p>${completedHtml}${remindersHtml}${summary ? markdownToHtml(summary) : ""}`;
+  const bodyHtml = `<h2>${title}</h2><p><strong>${thoughts.length} thought${thoughts.length === 1 ? "" : "s"}</strong> this week (${typeSummary})<br><strong>${stats.total_thoughts} total</strong> in your cerebro</p>${completedHtml}${remindersHtml}${summary ? markdownToHtml(summary) : ""}`;
 
   return {
     status: 200,

@@ -1,6 +1,6 @@
 # Prompt 4: Quick Capture Templates
 
-Nine patterns for capturing thoughts, completing tasks, reopening items, setting reminders, and capturing files. Each one is optimized for clean metadata extraction in your Open Brain's processing pipeline.
+Nine patterns for capturing thoughts, completing tasks, reopening items, setting reminders, and capturing files. Each one is optimized for clean metadata extraction in your Cerebro's processing pipeline.
 
 ## When to Use
 
@@ -8,7 +8,7 @@ Keep these handy as a reference. After a week of capturing, you won't need them 
 
 ## Why Formatting Matters
 
-Your Open Brain's Azure Function uses an LLM to extract metadata from each capture — people, topics, action items, type, and completion intent. These templates are structured to give that LLM clear signals, which means better tagging, better search, better retrieval.
+Your Cerebro's Azure Function uses an LLM to extract metadata from each capture — people, topics, action items, type, and completion intent. These templates are structured to give that LLM clear signals, which means better tagging, better search, better retrieval.
 
 > These are not prompts to paste into AI. These are templates for what you type into your dedicated Teams capture channel or say directly to any MCP-connected AI using "save this" or "remember this."
 
@@ -74,7 +74,7 @@ Meeting with [who] about [topic]. Key points: [the important stuff]. Action item
 Meeting with design team about the dashboard redesign. Key points: they want to cut three panels, keep the revenue chart, add a trend line. Action items: I send them the API spec by Thursday, they send revised mocks by Monday.
 ```
 
-**Why it works:** Hits multiple extraction targets at once — people, topics, action items, dates. Dense captures like this are the highest-value entries in your brain.
+**Why it works:** Hits multiple extraction targets at once — people, topics, action items, dates. Dense captures like this are the highest-value entries in your cerebro.
 
 ---
 

@@ -19,7 +19,7 @@ If the HTTP action returns a 401:
 2. **Check flow run history** at [make.powerautomate.com](https://make.powerautomate.com) — look for failed runs
 3. **Check function logs:**
    ```bash
-   az functionapp log tail --name open-brain-func --resource-group open-brain-rg
+   az functionapp log tail --name cerebro-func --resource-group cerebro-rg
    ```
 
 ### Capture flow is looping (infinite replies)
@@ -39,13 +39,13 @@ Most likely the `DATABASE_URL` is wrong or the PostgreSQL firewall is blocking t
 
 - Verify the connection string in app settings:
   ```bash
-  az functionapp config appsettings list --name open-brain-func --resource-group open-brain-rg
+  az functionapp config appsettings list --name cerebro-func --resource-group cerebro-rg
   ```
 - Make sure you've allowed Azure services to connect:
   ```bash
   az postgres flexible-server firewall-rule create \
-    --resource-group open-brain-rg \
-    --name open-brain-db \
+    --resource-group cerebro-rg \
+    --name cerebro-db \
     --rule-name allow-azure \
     --start-ip-address 0.0.0.0 \
     --end-ip-address 0.0.0.0
@@ -90,8 +90,8 @@ Verify the digest URL includes the access key: `?key=YOUR-ACCESS-KEY`. The diges
 The access key doesn't match. Verify:
 ```bash
 az functionapp config appsettings list \
-  --name open-brain-func \
-  --resource-group open-brain-rg \
+  --name cerebro-func \
+  --resource-group cerebro-rg \
   --query "[?name=='MCP_ACCESS_KEY'].value" -o tsv
 ```
 
@@ -103,11 +103,11 @@ Make sure the `?key=` value in your URL matches exactly. If using the header app
 - Verify the connector is enabled for your conversation (click **+** → **Connectors**)
 - Try removing and re-adding the connector
 
-### ChatGPT doesn't use the Open Brain tools
+### ChatGPT doesn't use the Cerebro tools
 
 - Confirm **Developer Mode** is enabled (Settings → Apps & Connectors → Advanced settings)
 - Check the connector is active for the current conversation
-- Be explicit: "Use the Open Brain search_thoughts tool to search for [topic]"
+- Be explicit: "Use the Cerebro search_thoughts tool to search for [topic]"
 
 ### Search returns no results
 
@@ -125,7 +125,7 @@ Cold starts on the Azure Functions Consumption plan can take 10-20 seconds. Subs
 
 - Check the firewall rules allow your IP:
   ```bash
-  az postgres flexible-server firewall-rule list --resource-group open-brain-rg --name open-brain-db
+  az postgres flexible-server firewall-rule list --resource-group cerebro-rg --name cerebro-db
   ```
 - Make sure `sslmode=require` is in your connection string
 - Verify the admin password is correct
@@ -186,5 +186,5 @@ Azure Database for PostgreSQL Flexible Server supports pgvector natively. If `CR
 ### File URL not accessible
 
 - File URLs use SAS tokens with 1-year expiry — check if the token has expired
-- Verify the `brain-files` container exists in `openbrainstorage`
+- Verify the `cerebro-files` container exists in `cerebrostorage`
 - Check that `AZURE_STORAGE_CONNECTION_STRING` is set correctly in function app settings

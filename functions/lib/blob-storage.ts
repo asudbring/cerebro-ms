@@ -7,7 +7,7 @@
 import { BlobServiceClient, StorageSharedKeyCredential, generateBlobSASQueryParameters, BlobSASPermissions } from "@azure/storage-blob";
 import { randomUUID } from "crypto";
 
-const CONTAINER_NAME = "brain-files";
+const CONTAINER_NAME = "cerebro-files";
 
 let blobServiceClient: BlobServiceClient | null = null;
 

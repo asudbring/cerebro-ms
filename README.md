@@ -1,6 +1,6 @@
-# 🧠 Open Brain — Microsoft Edition
+# 🧠 Cerebro — Microsoft Edition
 
-An AI-powered personal knowledge base built on Azure. Capture thoughts in Microsoft Teams (via Power Automate), embed them with Azure OpenAI, store them in PostgreSQL with vector search, and expose an MCP server so any AI assistant can search and write to your brain.
+An AI-powered personal knowledge base built on Azure. Capture thoughts in Microsoft Teams (via Power Automate), embed them with Azure OpenAI, store them in PostgreSQL with vector search, and expose an MCP server so any AI assistant can search and write to your cerebro.
 
 Adapted from [Nate B. Jones' Open Brain](https://natebjones.com) guide — same architecture, Microsoft stack.
 
@@ -8,7 +8,7 @@ Adapted from [Nate B. Jones' Open Brain](https://natebjones.com) guide — same 
 
 ## What You're Building
 
-A Teams channel where you post a thought — Power Automate detects the new message, sends it to an Azure Function that embeds and classifies it automatically — you get a confirmation reply. Mark tasks done by typing `done: <description>`. Reopen tasks with `reopen: <description>`. Get daily and weekly digests in Teams and email. Plus an MCP server that lets any AI assistant search your brain by meaning.
+A Teams channel where you post a thought — Power Automate detects the new message, sends it to an Azure Function that embeds and classifies it automatically — you get a confirmation reply. Mark tasks done by typing `done: <description>`. Reopen tasks with `reopen: <description>`. Get daily and weekly digests in Teams and email. Plus an MCP server that lets any AI assistant search your cerebro by meaning.
 
 ```
 You post in Teams  →  Power Automate  →  Azure Function  →  AI embeds + classifies  →  PostgreSQL
@@ -20,7 +20,7 @@ You post in Teams  →  Power Automate  →  Azure Function  →  AI embeds + cl
 
 ## The Stack
 
-| Role | Azure/Microsoft Tool | Original (Open Brain) |
+| Role | Azure/Microsoft Tool | Original (Open Brain, before rebrand) |
 |------|---------------------|----------------------|
 | Capture interface | Microsoft Teams + Power Automate | Slack |
 | Database + vector search | Azure Database for PostgreSQL + pgvector | Supabase |
@@ -34,7 +34,7 @@ You post in Teams  →  Power Automate  →  Azure Function  →  AI embeds + cl
 | Function | Trigger | Purpose |
 |----------|---------|---------|
 | `ingest-thought` | HTTP POST | Capture: embed, classify, store, detect completions/reopens |
-| `open-brain-mcp` | HTTP GET/POST | MCP server with 4 tools for AI clients |
+| `cerebro-mcp` | HTTP GET/POST | MCP server with 4 tools for AI clients |
 | `daily-digest` | HTTP GET | Generate daily summary (called by Power Automate) |
 | `weekly-digest` | HTTP GET | Generate weekly summary (called by Power Automate) |
 
@@ -47,7 +47,7 @@ You post in Teams  →  Power Automate  →  Azure Function  →  AI embeds + cl
 - **Reminders:** Include a time/date in your thought → calendar event created automatically (shows as Free, 24-hour advance reminder)
 - **Daily Digest:** AI-generated summary of yesterday's thoughts + completed tasks + upcoming reminders (next 48h)
 - **Weekly Digest:** Theme analysis, open loops, completed tasks + upcoming reminders (next 7 days)
-- **MCP Server:** 4 tools (search_thoughts, browse_recent, brain_stats, capture_thought) for any AI client
+- **MCP Server:** 4 tools (search_thoughts, browse_recent, cerebro_stats, capture_thought) for any AI client
 - **Semantic Search:** Find thoughts by meaning, not keywords — includes file contents
 
 ## Prerequisites
@@ -72,10 +72,10 @@ CHAT_DEPLOYMENT_NAME=           # Step 2
 
 # Azure Database for PostgreSQL
 SERVER_NAME=                    # Step 1
-DATABASE_NAME=open_brain        # Step 1
+DATABASE_NAME=cerebro           # Step 1
 ADMIN_USER=                     # Step 1
 ADMIN_PASSWORD=                 # Step 1
-DATABASE_URL=                   # Step 1 (assembled)
+DATABASE_URL=                   # Step 1 (assembled, e.g. postgresql://cerebro_app:PASS@...)
 
 # Azure Functions
 FUNCTION_APP_URL=               # Step 3
@@ -107,14 +107,14 @@ MCP_CONNECTION_URL=             # Step 6
 az login
 
 # Create a resource group (or use an existing one)
-az group create --name open-brain-rg --location eastus
+az group create --name cerebro-rg --location eastus
 
 # Create the PostgreSQL Flexible Server
 az postgres flexible-server create \
-  --resource-group open-brain-rg \
-  --name open-brain-db \
+  --resource-group cerebro-rg \
+  --name cerebro-db \
   --location eastus \
-  --admin-user brainadmin \
+  --admin-user cerebroadmin \
   --admin-password 'YOUR_STRONG_PASSWORD' \
   --sku-name Standard_B1ms \
   --tier Burstable \
@@ -129,8 +129,8 @@ Save the server name and credentials in your tracker.
 
 ```bash
 az postgres flexible-server firewall-rule create \
-  --resource-group open-brain-rg \
-  --name open-brain-db \
+  --resource-group cerebro-rg \
+  --name cerebro-db \
   --rule-name allow-setup \
   --start-ip-address YOUR_IP \
   --end-ip-address YOUR_IP
@@ -140,8 +140,8 @@ az postgres flexible-server firewall-rule create \
 
 ```bash
 az postgres flexible-server parameter set \
-  --resource-group open-brain-rg \
-  --server-name open-brain-db \
+  --resource-group cerebro-rg \
+  --server-name cerebro-db \
   --name azure.extensions \
   --value vector
 ```
@@ -150,11 +150,11 @@ az postgres flexible-server parameter set \
 
 ```bash
 # Connect with psql
-psql "host=open-brain-db.postgres.database.azure.com dbname=postgres user=brainadmin sslmode=require"
+psql "host=cerebro-db.postgres.database.azure.com dbname=postgres user=cerebroadmin sslmode=require"
 
 # Create the database
-CREATE DATABASE open_brain;
-\c open_brain
+CREATE DATABASE cerebro;
+\c cerebro
 
 # Run each script in order (or paste their contents):
 \i infra/database/01-enable-pgvector.sql
@@ -164,7 +164,7 @@ CREATE DATABASE open_brain;
 \i infra/database/05-add-status-column.sql
 ```
 
-Assemble your connection string: `postgresql://brainadmin:PASSWORD@open-brain-db.postgres.database.azure.com:5432/open_brain?sslmode=require`
+Assemble your connection string: `postgresql://cerebroadmin:PASSWORD@cerebro-db.postgres.database.azure.com:5432/cerebro?sslmode=require`
 
 ## Step 2: Set Up Azure OpenAI
 
@@ -172,8 +172,8 @@ Assemble your connection string: `postgresql://brainadmin:PASSWORD@open-brain-db
 
 ```bash
 az cognitiveservices account create \
-  --name open-brain-ai \
-  --resource-group open-brain-rg \
+  --name cerebro-ai \
+  --resource-group cerebro-rg \
   --kind OpenAI \
   --sku S0 \
   --location eastus
@@ -184,8 +184,8 @@ az cognitiveservices account create \
 ```bash
 # Embedding model (1536 dimensions)
 az cognitiveservices account deployment create \
-  --name open-brain-ai \
-  --resource-group open-brain-rg \
+  --name cerebro-ai \
+  --resource-group cerebro-rg \
   --deployment-name text-embedding-3-small \
   --model-name text-embedding-3-small \
   --model-version "1" \
@@ -195,8 +195,8 @@ az cognitiveservices account deployment create \
 
 # Chat model (metadata extraction + digests)
 az cognitiveservices account deployment create \
-  --name open-brain-ai \
-  --resource-group open-brain-rg \
+  --name cerebro-ai \
+  --resource-group cerebro-rg \
   --deployment-name gpt-4o-mini \
   --model-name gpt-4o-mini \
   --model-version "2024-07-18" \
@@ -210,14 +210,14 @@ az cognitiveservices account deployment create \
 ```bash
 # Endpoint
 az cognitiveservices account show \
-  --name open-brain-ai \
-  --resource-group open-brain-rg \
+  --name cerebro-ai \
+  --resource-group cerebro-rg \
   --query properties.endpoint -o tsv
 
 # API Key
 az cognitiveservices account keys list \
-  --name open-brain-ai \
-  --resource-group open-brain-rg \
+  --name cerebro-ai \
+  --resource-group cerebro-rg \
   --query key1 -o tsv
 ```
 
@@ -239,20 +239,20 @@ cd ..
 ```bash
 # Create a storage account (required by Azure Functions)
 az storage account create \
-  --name openbrainstorage \
-  --resource-group open-brain-rg \
+  --name cerebrostorage \
+  --resource-group cerebro-rg \
   --location eastus \
   --sku Standard_LRS
 
 # Create the Function App
 az functionapp create \
-  --resource-group open-brain-rg \
+  --resource-group cerebro-rg \
   --consumption-plan-location eastus \
   --runtime node \
   --runtime-version 20 \
   --functions-version 4 \
-  --name open-brain-func \
-  --storage-account openbrainstorage
+  --name cerebro-func \
+  --storage-account cerebrostorage
 ```
 
 ### Generate an Access Key
@@ -271,14 +271,14 @@ Copy the 64-character hex string into your credential tracker as `MCP_ACCESS_KEY
 
 ```bash
 az functionapp config appsettings set \
-  --name open-brain-func \
-  --resource-group open-brain-rg \
+  --name cerebro-func \
+  --resource-group cerebro-rg \
   --settings \
-    AZURE_OPENAI_ENDPOINT="https://open-brain-ai.openai.azure.com" \
+    AZURE_OPENAI_ENDPOINT="https://cerebro-ai.openai.azure.com" \
     AZURE_OPENAI_API_KEY="your-key" \
     AZURE_OPENAI_EMBEDDING_DEPLOYMENT="text-embedding-3-small" \
     AZURE_OPENAI_CHAT_DEPLOYMENT="gpt-4o-mini" \
-    DATABASE_URL="postgresql://brainadmin:PASSWORD@open-brain-db.postgres.database.azure.com:5432/open_brain?sslmode=require" \
+    DATABASE_URL="postgresql://cerebroadmin:PASSWORD@cerebro-db.postgres.database.azure.com:5432/cerebro?sslmode=require" \
     MCP_ACCESS_KEY="your-64-char-key"
 ```
 
@@ -286,15 +286,15 @@ az functionapp config appsettings set \
 
 ```bash
 cd functions
-func azure functionapp publish open-brain-func --node
+func azure functionapp publish cerebro-func --node
 cd ..
 ```
 
 Your function URLs will be:
-- **Ingest:** `https://open-brain-func.azurewebsites.net/api/ingest-thought`
-- **MCP:** `https://open-brain-func.azurewebsites.net/api/open-brain-mcp`
-- **Daily Digest:** `https://open-brain-func.azurewebsites.net/api/daily-digest`
-- **Weekly Digest:** `https://open-brain-func.azurewebsites.net/api/weekly-digest`
+- **Ingest:** `https://cerebro-func.azurewebsites.net/api/ingest-thought`
+- **MCP:** `https://cerebro-func.azurewebsites.net/api/cerebro-mcp`
+- **Daily Digest:** `https://cerebro-func.azurewebsites.net/api/daily-digest`
+- **Weekly Digest:** `https://cerebro-func.azurewebsites.net/api/weekly-digest`
 
 ## Step 4: Set Up Power Automate Capture Flow
 
@@ -305,7 +305,7 @@ Power Automate connects Teams to your Azure Function. When you post a message in
 ### Create the Capture Flow
 
 1. Go to [make.powerautomate.com](https://make.powerautomate.com) → **Create** → **Automated cloud flow**
-2. Name: **Open Brain — Capture**
+2. Name: **Cerebro — Capture**
 3. Trigger: **When a new channel message is added** (Microsoft Teams)
    - **Team:** your team
    - **Channel:** your dedicated capture channel
@@ -437,7 +437,7 @@ A calendar event will appear in your Outlook calendar (15-minute event, shown as
 
 The capture flow already includes `attachments` in the HTTP body (step 6 above). When you post a file in your capture channel, the function will:
 - Download the file from Teams
-- Upload it to Azure Blob Storage (`brain-files` container)
+- Upload it to Azure Blob Storage (`cerebro-files` container)
 - Analyze images with gpt-4o vision (description + OCR)
 - Extract text from Word documents
 - Combine the analysis with your message text for embedding
@@ -461,13 +461,13 @@ Test by posting a screenshot in your capture channel. You should see a reply wit
 The MCP server was already deployed in Step 3. Your MCP server URL is:
 
 ```
-https://open-brain-func.azurewebsites.net/api/open-brain-mcp
+https://cerebro-func.azurewebsites.net/api/cerebro-mcp
 ```
 
 Build your MCP Connection URL by adding the access key:
 
 ```
-https://open-brain-func.azurewebsites.net/api/open-brain-mcp?key=your-access-key
+https://cerebro-func.azurewebsites.net/api/cerebro-mcp?key=your-access-key
 ```
 
 Save this in your credential tracker as `MCP_CONNECTION_URL`.
@@ -475,7 +475,7 @@ Save this in your credential tracker as `MCP_CONNECTION_URL`.
 Verify it works:
 
 ```bash
-curl "https://open-brain-func.azurewebsites.net/api/open-brain-mcp?key=your-access-key"
+curl "https://cerebro-func.azurewebsites.net/api/cerebro-mcp?key=your-access-key"
 ```
 
 You should get a JSON response with status "ok" and the 4 tool names.
@@ -486,7 +486,7 @@ You should get a JSON response with status "ok" and the 4 tool names.
 
 1. Open Claude Desktop → **Settings** → **Connectors**
 2. Click **Add custom connector**
-3. **Name:** Open Brain
+3. **Name:** Cerebro
 4. **Remote MCP server URL:** paste your MCP Connection URL
 5. Click **Add**
 
@@ -497,7 +497,7 @@ Requires a paid ChatGPT plan. Enable Developer Mode first:
 1. Go to chatgpt.com → **Settings** → **Apps & Connectors** → **Advanced settings**
 2. Toggle **Developer mode** ON
 3. In **Apps & Connectors**, click **Create**
-4. **Name:** Open Brain
+4. **Name:** Cerebro
 5. **MCP endpoint URL:** paste your MCP Connection URL
 6. **Authentication:** No Authentication (key is in the URL)
 7. Click **Create**
@@ -510,9 +510,9 @@ Add to your VS Code user `settings.json`:
 {
   "mcp": {
     "servers": {
-      "open-brain": {
+      "cerebro": {
         "type": "http",
-        "url": "https://YOUR-FUNC.azurewebsites.net/api/open-brain-mcp?key=YOUR-ACCESS-KEY"
+        "url": "https://YOUR-FUNC.azurewebsites.net/api/cerebro-mcp?key=YOUR-ACCESS-KEY"
       }
     }
   }
@@ -522,8 +522,8 @@ Add to your VS Code user `settings.json`:
 ### Claude Code
 
 ```bash
-claude mcp add --transport http open-brain \
-  https://open-brain-func.azurewebsites.net/api/open-brain-mcp \
+claude mcp add --transport http cerebro \
+  https://cerebro-func.azurewebsites.net/api/cerebro-mcp \
   --header "x-brain-key: your-access-key"
 ```
 
@@ -536,11 +536,11 @@ claude mcp add --transport http open-brain \
 ```json
 {
   "mcpServers": {
-    "open-brain": {
+    "cerebro": {
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://open-brain-func.azurewebsites.net/api/open-brain-mcp",
+        "https://cerebro-func.azurewebsites.net/api/cerebro-mcp",
         "--header",
         "x-brain-key:${BRAIN_KEY}"
       ],
@@ -558,7 +558,7 @@ claude mcp add --transport http open-brain \
 |--------|-----------|
 | "What did I capture about career changes?" | search_thoughts |
 | "Show me my recent thoughts" | browse_recent |
-| "How many thoughts do I have?" | brain_stats |
+| "How many thoughts do I have?" | cerebro_stats |
 | "Find my notes about the API redesign" | search_thoughts |
 | "Remember that Marcus wants to move to the platform team" | capture_thought |
 
@@ -571,7 +571,7 @@ claude mcp add --transport http open-brain \
 ### Daily Digest Flow
 
 1. Go to [make.powerautomate.com](https://make.powerautomate.com) → **Create** → **Scheduled cloud flow**
-2. Name: **Open Brain — Daily Digest**
+2. Name: **Cerebro — Daily Digest**
 3. Start: tomorrow at **8:00 AM**, repeat every **1 day**
 
 4. **Add action: HTTP**
@@ -618,15 +618,15 @@ The weekly digest includes theme analysis, open loops, and the **top 5 completed
 
 ## What's Next: Companion Prompts
 
-Your Open Brain is live. Now make it work for you. The [companion prompts](prompts/) cover the full lifecycle:
+Your Cerebro is live. Now make it work for you. The [companion prompts](prompts/) cover the full lifecycle:
 
-1. **[Memory Migration](prompts/01-memory-migration.md)** — Extract everything Claude/ChatGPT already knows about you into your brain
+1. **[Memory Migration](prompts/01-memory-migration.md)** — Extract everything Claude/ChatGPT already knows about you into your cerebro
 2. **[Second Brain Migration](prompts/02-second-brain-migration.md)** — Bring over your existing notes from Microsoft Lists, Notion, Obsidian, or any other system
-3. **[Open Brain Spark](prompts/03-open-brain-spark.md)** — Discover capture patterns specific to your workflow
+3. **[Cerebro Spark](prompts/03-cerebro-spark.md)** — Discover capture patterns specific to your workflow
 4. **[Quick Capture Templates](prompts/04-quick-capture-templates.md)** — Capture patterns, task completion, and reopen commands
 5. **[Weekly Review](prompts/05-weekly-review.md)** — Friday ritual that surfaces themes, forgotten action items, and connections
 
-**Start with Memory Migration**, then run Second Brain Migration if you have existing notes. The Spark shows you what to capture going forward. The templates build the daily habit. The weekly review closes the loop.
+**Start with Memory Migration**, then run Second Brain Migration if you have existing notes. The Cerebro Spark shows you what to capture going forward. The templates build the daily habit. The weekly review closes the loop.
 
 ---
 
@@ -651,7 +651,7 @@ See [docs/architecture.md](docs/architecture.md) for the system design, data flo
 
 ## Credits
 
-Architecture inspired by [Nate B. Jones'](https://natebjones.com) Open Brain system and [the companion video](https://www.youtube.com/watch?v=0TpON5T-Sw4). The original uses Slack + Supabase + OpenRouter. This repo adapts it for the Microsoft/Azure ecosystem.
+Architecture inspired by [Nate B. Jones'](https://natebjones.com) Open Brain system and [the companion video](https://www.youtube.com/watch?v=0TpON5T-Sw4). The original uses Slack + Supabase + OpenRouter. This repo (Cerebro) adapts it for the Microsoft/Azure ecosystem.
 
 ## License
 

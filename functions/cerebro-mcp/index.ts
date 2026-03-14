@@ -1,10 +1,10 @@
 /**
- * open-brain-mcp — Azure Function
+ * cerebro-mcp — Azure Function
  *
  * MCP (Model Context Protocol) server that exposes 4 tools:
  *   - search_thoughts: semantic search by meaning
  *   - browse_recent: list recent thoughts with optional type filter
- *   - brain_stats: overview of your brain's contents
+ *   - cerebro_stats: overview of your cerebro's contents
  *   - capture_thought: add a thought from any MCP client
  *
  * Authenticates via x-brain-key header or ?key= query param.
@@ -69,7 +69,7 @@ function formatRecentThoughts(thoughts: ThoughtRow[]): string {
 }
 
 /**
- * Format brain stats for display.
+ * Format cerebro stats for display.
  */
 function formatStats(stats: BrainStats): string {
   const lines: string[] = [];
@@ -118,7 +118,7 @@ async function handleMcpRequest(
           {
             name: "search_thoughts",
             description:
-              "Search your brain by meaning. Uses vector similarity to find thoughts related to your query, even if they don't share exact keywords.",
+              "Search your cerebro by meaning. Uses vector similarity to find thoughts related to your query, even if they don't share exact keywords.",
             inputSchema: {
               type: "object",
               properties: {
@@ -140,7 +140,7 @@ async function handleMcpRequest(
           {
             name: "browse_recent",
             description:
-              "Browse your most recent thoughts, optionally filtered by type (person_note, project_update, idea, task, meeting_note, decision, reflection, reference).",
+              "Browse your most recent thoughts, optionally filtered by type (person_note, project_update, idea, task, meeting_note, decision, reflection, reference). Searches your cerebro.",
             inputSchema: {
               type: "object",
               properties: {
@@ -150,15 +150,15 @@ async function handleMcpRequest(
             },
           },
           {
-            name: "brain_stats",
+            name: "cerebro_stats",
             description:
-              "Get an overview of your brain — total thoughts, date range, most common types, most mentioned people.",
+              "Get an overview of your cerebro — total thoughts, date range, most common types, most mentioned people.",
             inputSchema: { type: "object", properties: {} },
           },
           {
             name: "capture_thought",
             description:
-              "Save a new thought to your brain. It will be embedded and classified automatically. Use this when the user wants to remember something.",
+              "Save a new thought to your cerebro. It will be embedded and classified automatically. Use this when the user wants to remember something.",
             inputSchema: {
               type: "object",
               properties: {
@@ -234,7 +234,7 @@ async function handleMcpRequest(
           };
         }
 
-        case "brain_stats": {
+        case "cerebro_stats": {
           const stats = await getStats();
           return {
             jsonrpc: "2.0",
@@ -376,7 +376,7 @@ async function handleMcpRequest(
       result: {
         protocolVersion: "2024-11-05",
         capabilities: { tools: {} },
-        serverInfo: { name: "open-brain", version: "1.0.0" },
+        serverInfo: { name: "cerebro", version: "1.0.0" },
       },
     };
   }
@@ -399,10 +399,10 @@ async function mcpServer(req: HttpRequest, context: InvocationContext): Promise<
     return {
       status: 200,
       jsonBody: {
-        name: "open-brain-mcp",
+        name: "cerebro-mcp",
         version: "1.0.0",
         status: "ok",
-        tools: ["search_thoughts", "browse_recent", "brain_stats", "capture_thought", "complete_task", "reopen_task"],
+        tools: ["search_thoughts", "browse_recent", "cerebro_stats", "capture_thought", "complete_task", "reopen_task"],
       },
     };
   }
@@ -425,7 +425,7 @@ async function mcpServer(req: HttpRequest, context: InvocationContext): Promise<
   }
 }
 
-app.http("open-brain-mcp", {
+app.http("cerebro-mcp", {
   methods: ["GET", "POST"],
   authLevel: "anonymous",
   handler: mcpServer,

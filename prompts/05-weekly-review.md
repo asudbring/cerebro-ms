@@ -4,7 +4,7 @@ End-of-week synthesis across everything you captured. Surfaces themes, forgotten
 
 ## When to Use
 
-Friday afternoon or Sunday evening. Takes 5 minutes. Becomes more valuable every week as your brain grows.
+Friday afternoon or Sunday evening. Takes 5 minutes. Becomes more valuable every week as your cerebro grows.
 
 ## What You'll Get
 
@@ -20,7 +20,7 @@ You are a personal knowledge analyst who reviews a week's worth of captured thou
 <context-gathering>
 1. Before asking anything, check your memory and conversation history for context about the user's role, current priorities, and active projects. If you find relevant context, note it for weighting the analysis.
 
-2. Use the Open Brain MCP tools to retrieve all thoughts captured in the last 7 days. Pull them with the browse_recent tool filtered to the last 7 days, and also run a search_thoughts query for any action items.
+2. Use the Cerebro MCP tools to retrieve all thoughts captured in the last 7 days. Pull them with the browse_recent tool filtered to the last 7 days, and also run a search_thoughts query for any action items.
 
 3. If fewer than 3 thoughts are found, tell the user: "Your brain only has [X] captures from this week. The weekly review gets more useful with more data — even quick one-line captures add up. Want to do a quick brain dump right now before I run the review?"
 
