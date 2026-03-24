@@ -1,559 +1,687 @@
-# Cerebro — Setup & Deployment Guide
+# Cerebro Setup Guide — Azure Edition
 
 Complete guide to provisioning, configuring, and deploying Cerebro on Azure.
+From zero to a working personal knowledge base in ~60 minutes.
 
 ---
 
-## 1. Prerequisites
+## Before You Start
 
-Before starting, ensure you have:
+### Prerequisites
 
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| **Azure subscription** | — | Owner or Contributor role required |
-| **Azure CLI** | Latest | Logged in (`az login`) |
-| **Terraform** | >= 1.5 | Manages all infrastructure |
-| **Azure Functions Core Tools** | v4 | For local dev and deployment |
-| **Node.js** | 18+ | Runtime for Azure Functions |
-| **npm** | 9+ | Package manager |
-| **psql** | Any | PostgreSQL client for running migrations |
-| **Entra ID access** | — | Permission to create app registrations in your tenant |
+| Prerequisite | Why | How to Get |
+|---|---|---|
+| Azure subscription | All resources deployed here | [portal.azure.com](https://portal.azure.com) |
+| Azure CLI | Infrastructure provisioning | `winget install Microsoft.AzureCLI` or `brew install azure-cli` |
+| Terraform >= 1.5 | Infrastructure as code | [terraform.io/downloads](https://developer.hashicorp.com/terraform/downloads) |
+| Node.js 20+ | Build function app | [nodejs.org](https://nodejs.org) |
+| Azure Functions Core Tools v4 | Local dev + deployment | `npm i -g azure-functions-core-tools@4 --unsafe-perm true` |
+| GitHub account | OAuth authentication for MCP | [github.com](https://github.com) |
+| Git | Source control | [git-scm.com](https://git-scm.com) |
 
-Install Azure CLI and Functions Core Tools:
+### Optional Prerequisites
 
-```bash
-# Azure CLI
-winget install Microsoft.AzureCLI        # Windows
-brew install azure-cli                   # macOS
+| If you want... | You also need... |
+|---|---|
+| Teams bot capture | Microsoft 365 account, Teams admin access for sideloading |
+| Email digests | Azure Communication Services (provisioned by Terraform) |
+| File attachments | Azure Blob Storage (provisioned by Terraform) |
+| Calendar reminders | Entra ID app registration with Graph API permissions |
 
-# Azure Functions Core Tools v4
-npm install -g azure-functions-core-tools@4 --unsafe-perm true
+### Architecture Overview
 
-# Terraform
-winget install HashiCorp.Terraform       # Windows
-brew install terraform                   # macOS
+```
+┌─────────────┐     ┌──────────────┐     ┌───────────────────┐
+│ MCP Client  │────▶│              │────▶│ Azure Database for│
+│ (VS Code,   │     │ Azure        │     │ PostgreSQL        │
+│  Claude,    │     │ Functions    │     │ (pgvector)        │
+│  ChatGPT)   │     │              │     └───────────────────┘
+├─────────────┤     │ • cerebro-mcp│     ┌───────────────────┐
+│ Microsoft   │────▶│ • cerebro-   │────▶│ Azure OpenAI      │
+│ Teams       │     │   teams      │     │ (embeddings+chat) │
+└─────────────┘     │ • cerebro-   │     └───────────────────┘
+                    │   digest     │     ┌───────────────────┐
+                    │ • cerebro-   │────▶│ Azure Blob Storage│
+                    │   oauth      │     │ (file attachments)│
+                    └──────────────┘     └───────────────────┘
+                           │
+                    ┌──────┴──────┐
+                    │ ACS Email   │
+                    │ (digests)   │
+                    └─────────────┘
+```
+
+**Functions:**
+- **cerebro-mcp** — MCP server with 7 tools (search, browse, stats, capture, complete, reopen, delete)
+- **cerebro-teams** — Teams bot webhook: captures thoughts, handles `done:`/`reopen:`/`delete:` intents
+- **cerebro-digest** — Daily and weekly AI-generated summaries via HTTP GET
+- **cerebro-oauth** — GitHub OAuth 2.1 flow for MCP client authentication
+
+### 📋 Credential Tracker
+
+Copy this template somewhere safe. Fill in values as you complete each phase.
+
+```
+# Cerebro Credentials — KEEP SECRET
+
+## Azure
+Subscription ID: ___
+Tenant ID: ___
+Resource Group: cerebro-rg
+
+## PostgreSQL
+Host: ___.postgres.database.azure.com
+Admin User: cerebroadmin
+Admin Password: ___
+Database: cerebro
+DATABASE_URL: postgresql://cerebroadmin:___@___.postgres.database.azure.com:5432/cerebro?sslmode=require
+
+## Azure OpenAI
+Endpoint: https://___.openai.azure.com
+API Key: ___
+Embedding Deployment: text-embedding-3-small
+Chat Deployment: gpt-4o-mini
+Vision Deployment: gpt-4o
+
+## GitHub OAuth App
+Client ID: ___
+Client Secret: ___
+Callback URL: https://___.azurewebsites.net/oauth/callback
+
+## Teams Bot
+App ID: ___
+App Secret: ___
+
+## ACS Email
+Connection String: ___
+Sender Address: DoNotReply@___.azurecomm.net
+
+## Function App
+Name: ___
+URL: https://___.azurewebsites.net
 ```
 
 ---
 
-## 2. Infrastructure Provisioning (Terraform)
+## Phase 1: Infrastructure (Terraform)
 
-### 2.1 Clone and configure
+⏱️ ~20 minutes
+
+### Step 1: Clone and Configure
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/YOUR_USER/cerebro-ms.git
 cd cerebro-ms/infra/terraform
 ```
 
-Edit `terraform.tfvars` with your values:
+Create `terraform.tfvars` with your values. Key variables from `variables.tf`:
 
 ```hcl
-location            = "centralus"
-resource_group_name = "cerebro-rg"
+# Required — must be globally unique across Azure
+postgresql_server_name = "cerebro-YOURNAME-db"
+postgresql_admin_password = "YourStrongPassword123!"    # save this!
+openai_account_name    = "cerebro-YOURNAME-openai"
+function_app_name      = "cerebro-YOURNAME-func"
+storage_account_name   = "cerebroYOURNAMEstor"          # lowercase, no hyphens
 
-# PostgreSQL
-postgresql_server_name    = "cerebro-db"
-postgresql_admin_username = "cerebroadmin"
-# postgresql_admin_password — pass via -var flag (do NOT commit)
+# Optional — defaults shown
+location               = "centralus"
+resource_group_name    = "cerebro-rg"
+openai_location        = "eastus2"                      # OpenAI may need a different region
+apim_publisher_email   = "you@example.com"              # required for APIM
 
-# Azure OpenAI (eastus2 for model availability)
-openai_account_name = "cerebro-openai"
-openai_location     = "eastus2"
+# Entra ID tenant for app registrations
+entra_tenant_id        = "your-tenant-id"
 
-# Storage (globally unique, lowercase, no hyphens)
-storage_account_name = "cerebrostorage"
-
-# Function App
-function_app_name = "cerebro-func"
-
-# API Management
-apim_name            = "cerebro-apim"
-apim_publisher_email = "you@example.com"
-apim_publisher_name  = "Cerebro Admin"
-
-# calendar_user_email — email for calendar reminder events
+# Digest email recipient (optional)
+digest_email_recipient = "you@example.com"
 ```
 
-### 2.2 Cross-tenant provider setup
+⚠️ **Storage account names** must be 3-24 characters, lowercase letters and numbers only — no hyphens or uppercase.
 
-Cerebro uses a **dual-provider** configuration:
-
-- **`azurerm`** — deploys Azure resources (resource group, PostgreSQL, OpenAI, Storage, Functions, APIM) into your Azure subscription.
-- **`azuread`** — creates Entra ID app registrations in a (potentially different) Entra ID tenant.
-
-This is defined in `providers.tf`:
-
-```hcl
-provider "azurerm" {
-  subscription_id = "YOUR-AZURE-SUBSCRIPTION-ID"
-  features {}
-}
-
-provider "azuread" {
-  tenant_id = "YOUR-ENTRA-TENANT-ID"
-}
-```
-
-Update the `subscription_id` and `tenant_id` in `providers.tf` to match your environment. If your Azure subscription and Entra ID tenant are the same, both will use the same tenant. If they differ (e.g., resources in a corporate subscription, app registrations in a lab tenant), the dual-provider setup handles this automatically — just ensure `az login` has access to both.
-
-### 2.3 Deploy
+### Step 2: Login and Deploy
 
 ```bash
+az login
+az account set --subscription "YOUR_SUBSCRIPTION"
+
 terraform init
-terraform plan -var="postgresql_admin_password=YOUR_SECURE_PASSWORD"
-terraform apply -var="postgresql_admin_password=YOUR_SECURE_PASSWORD"
+terraform plan    # review what will be created
+terraform apply   # type 'yes' to confirm
 ```
 
-### 2.4 Resources created
+This creates:
+- Resource Group
+- PostgreSQL Flexible Server (with `cerebro` database)
+- Azure OpenAI account + model deployments (text-embedding-3-small, gpt-4o-mini, gpt-4o)
+- Storage Account + `cerebro-files` blob container
+- Function App + App Service Plan (Consumption)
+- Application Insights + Log Analytics Workspace
+- APIM (Developer tier)
+- Entra ID app registrations (MCP + Teams bot)
+- ACS Email Service
 
-Terraform provisions the following:
+⚠️ **APIM Developer tier can take 30+ minutes.** If it hangs, see [Troubleshooting](#troubleshooting).
 
-| Resource | Name | Region | Notes |
-|----------|------|--------|-------|
-| Resource Group | `cerebro-rg` | centralus | Contains all Azure resources |
-| PostgreSQL Flexible Server | `cerebro-db` | centralus | v16, B_Standard_B1ms, 32 GB, pgvector allowlisted |
-| PostgreSQL Database | `cerebro` | centralus | UTF8, en_US.utf8 collation |
-| Azure OpenAI (Cognitive Services) | `cerebro-openai` | **eastus2** | S0 tier, custom subdomain |
-| Storage Account | `cerebrostorage` | centralus | Standard LRS, TLS 1.2 |
-| Storage Container | `cerebro-files` | centralus | Private access, for file attachments |
-| App Service Plan | `cerebro-func-plan` | centralus | Windows, Consumption (Y1) |
-| Function App | `cerebro-func` | centralus | Node 18, all app settings auto-configured |
-| Log Analytics Workspace | `cerebro-func-logs` | centralus | 30-day retention |
-| Application Insights | `cerebro-func-insights` | centralus | Connected to Log Analytics |
-| API Management | `cerebro-apim` | centralus | **Developer_1** tier |
-| Entra App: MCP Server | `Cerebro MCP Server` | Entra tenant | Single-tenant, `api://cerebro-mcp` |
-| Entra App: Teams Bot | `Cerebro Teams Bot` | Entra tenant | Multi-tenant (Bot Framework requirement) |
-| Entra App: Graph/Calendar | `Cerebro Calendar` | Entra tenant | Single-tenant, `Calendars.ReadWrite` |
-| Firewall Rule | `AllowAzureServices` | — | Allows Azure services to connect to PostgreSQL |
-
-> **⏱ APIM Developer tier takes 30–60 minutes to provision.** Plan accordingly — this is the longest step in `terraform apply`.
-
-### 2.5 Terraform outputs
-
-After apply, retrieve key values:
+### Step 3: Save Terraform Outputs
 
 ```bash
+terraform output -json > ../terraform-outputs.json
+
+# Key values to save — fill in your credential tracker:
 terraform output function_app_url
 terraform output postgresql_fqdn
+terraform output -raw postgresql_database_url
 terraform output openai_endpoint
-terraform output apim_gateway_url
+terraform output -raw storage_connection_string
 terraform output mcp_app_client_id
 terraform output teams_bot_app_id
-terraform output graph_app_client_id
-
-# Sensitive outputs
-terraform output -raw postgresql_database_url
-terraform output -raw storage_connection_string
+terraform output -raw acs_connection_string
+terraform output acs_email_sender
 ```
+
+### ✅ Verification Gate 1
+
+| # | Test | Expected |
+|---|------|----------|
+| 1 | `az group show -n cerebro-rg` | Resource group exists |
+| 2 | `az functionapp show -n YOUR-FUNC -g cerebro-rg` | Function app exists |
+| 3 | `az postgres flexible-server show -n YOUR-DB -g cerebro-rg` | PostgreSQL running |
+| 4 | `curl https://YOUR-FUNC.azurewebsites.net` | Returns default page |
 
 ---
 
-## 3. Database Setup
+## Phase 2: Database Setup
 
-### 3.1 Prerequisites
+⏱️ ~5 minutes
 
-Before running migrations, verify that Terraform has allowlisted the `vector` extension. This is handled automatically by the `azurerm_postgresql_flexible_server_configuration.pgvector` resource. If you need to verify manually:
+### Step 1: Enable pgvector Extension
 
-1. **Azure Portal** → PostgreSQL Flexible Server → **Server parameters**
-2. Search for `azure.extensions`
-3. Confirm `vector` is in the allowlist
-4. Save if changed (may require a server restart)
+1. Open **Azure Portal** → your PostgreSQL Flexible Server
+2. Go to **Server parameters**
+3. Search for `azure.extensions`
+4. Add `VECTOR` to the allowed list
+5. Click **Save** and wait for the server to update
 
-### 3.2 Connect to PostgreSQL
+### Step 2: Run Migrations
 
-```bash
-psql "host=cerebro-db.postgres.database.azure.com port=5432 dbname=cerebro user=cerebroadmin sslmode=require"
-```
+There are 4 migration scripts that must run in order. Each is idempotent (safe to re-run).
 
-You'll be prompted for the password. To avoid repeated prompts:
-
-```bash
-export PGPASSWORD="YOUR_PASSWORD"
-```
-
-### 3.3 Run migrations
-
-From the `infra/database/` directory, run each migration **in order**:
+**Option A: Using psql** (Mac/Linux or WSL)
 
 ```bash
-cd infra/database
+export PGPASSWORD="your_password"
+PGHOST="your-db.postgres.database.azure.com"
 
-PGHOST="cerebro-db.postgres.database.azure.com"
-PGUSER="cerebroadmin"
-PGDB="cerebro"
+psql "host=$PGHOST port=5432 dbname=cerebro user=cerebroadmin sslmode=require" \
+  -f infra/database/01-enable-pgvector.sql
 
-psql "host=$PGHOST port=5432 dbname=$PGDB user=$PGUSER sslmode=require" -f 01-enable-pgvector.sql
-psql "host=$PGHOST port=5432 dbname=$PGDB user=$PGUSER sslmode=require" -f 02-create-thoughts-table.sql
-psql "host=$PGHOST port=5432 dbname=$PGDB user=$PGUSER sslmode=require" -f 03-create-search-function.sql
-psql "host=$PGHOST port=5432 dbname=$PGDB user=$PGUSER sslmode=require" -f 04-create-digest-channels.sql
+psql "host=$PGHOST port=5432 dbname=cerebro user=cerebroadmin sslmode=require" \
+  -f infra/database/02-create-thoughts-table.sql
+
+psql "host=$PGHOST port=5432 dbname=cerebro user=cerebroadmin sslmode=require" \
+  -f infra/database/03-create-search-function.sql
+
+psql "host=$PGHOST port=5432 dbname=cerebro user=cerebroadmin sslmode=require" \
+  -f infra/database/04-create-digest-channels.sql
 ```
 
-### 3.4 Verify
+**Option B: Node.js script** (Windows-friendly, no psql needed)
 
-```sql
--- Check pgvector extension is installed
-\dx
--- Should show: vector | 0.x.x | public | vector data type and ivfflat and hnsw access methods
+```bash
+cd functions
+npm install   # ensures pg is installed
 
--- Check tables exist
-\dt
--- Should show: thoughts, digest_channels
+# Set your connection string
+# PowerShell:
+$env:DATABASE_URL = "postgresql://cerebroadmin:PASSWORD@YOUR-DB.postgres.database.azure.com:5432/cerebro?sslmode=require"
 
--- Check search function exists
-\df match_thoughts
+# bash:
+export DATABASE_URL="postgresql://cerebroadmin:PASSWORD@YOUR-DB.postgres.database.azure.com:5432/cerebro?sslmode=require"
+
+node -e "
+const { Pool } = require('pg');
+const fs = require('fs');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+async function run() {
+  const files = [
+    '../infra/database/01-enable-pgvector.sql',
+    '../infra/database/02-create-thoughts-table.sql',
+    '../infra/database/03-create-search-function.sql',
+    '../infra/database/04-create-digest-channels.sql'
+  ];
+  for (const f of files) {
+    const sql = fs.readFileSync(f, 'utf8');
+    await pool.query(sql);
+    console.log('✅ ' + f);
+  }
+  await pool.end();
+}
+run().catch(e => { console.error(e); process.exit(1); });
+"
 ```
 
-All migrations are **idempotent** — safe to re-run at any time.
+**Option C: Azure Data Studio / pgAdmin**
+
+Connect with your credentials and run each `.sql` file in order from the `infra/database/` directory.
+
+### ✅ Verification Gate 2
+
+| # | Test | Expected |
+|---|------|----------|
+| 1 | `SELECT * FROM pg_extension WHERE extname = 'vector';` | pgvector installed |
+| 2 | `SELECT count(*) FROM thoughts;` | Returns 0 (table exists) |
+| 3 | `SELECT * FROM match_thoughts(ARRAY[0.1]::vector(1536), 0.5, 5);` | Empty result set, no error |
+| 4 | `SELECT count(*) FROM digest_channels;` | Returns 0 (table exists) |
 
 ---
 
-## 4. Azure OpenAI Model Deployments
+## Phase 3: GitHub OAuth App
 
-Terraform creates three model deployments on the `cerebro-openai` account in **eastus2**:
+⏱️ ~5 minutes
 
-| Deployment Name | Model | Version | Capacity | Purpose |
-|----------------|-------|---------|----------|---------|
-| `text-embedding-3-small` | text-embedding-3-small | 1 | 120K TPM | Vector embeddings (1536 dimensions) |
-| `gpt-4o-mini` | gpt-4o-mini | 2024-07-18 | 30K TPM | Metadata extraction, digest summaries |
-| `gpt-4o` | gpt-4o | 2024-11-20 | 30K TPM | Image/document vision analysis |
+The MCP server uses GitHub OAuth for authentication. MCP clients (VS Code, Claude) authenticate by logging into GitHub.
 
-Verify deployments:
+### Step 1: Register OAuth App
+
+1. Go to [github.com/settings/developers](https://github.com/settings/developers)
+2. Click **New OAuth App**
+3. Fill in:
+   - **Application name:** `Cerebro`
+   - **Homepage URL:** `https://YOUR-FUNC.azurewebsites.net`
+   - **Authorization callback URL:** `https://YOUR-FUNC.azurewebsites.net/oauth/callback`
+4. Click **Register application**
+5. Copy the **Client ID** → save to credential tracker
+6. Click **Generate a new client secret** → copy it immediately (you won't see it again)
+
+### Step 2: Set Function App Settings
 
 ```bash
-az cognitiveservices account deployment list \
-  --name cerebro-openai \
-  --resource-group cerebro-rg \
-  --output table
+az functionapp config appsettings set -n YOUR-FUNC -g cerebro-rg --settings \
+  GITHUB_OAUTH_CLIENT_ID="your_client_id" \
+  GITHUB_OAUTH_CLIENT_SECRET="your_client_secret"
 ```
 
-> **Note:** Azure OpenAI is deployed to **eastus2** (not centralus) because model availability varies by region. This is controlled by the `openai_location` variable.
+⚠️ The environment variable names include `_OAUTH_` — don't drop it.
+
+### ✅ Verification Gate 3
+
+| # | Test | Expected |
+|---|------|----------|
+| 1 | `curl https://YOUR-FUNC.azurewebsites.net/.well-known/oauth-protected-resource` | JSON with `resource` URL |
+| 2 | `curl https://YOUR-FUNC.azurewebsites.net/.well-known/oauth-authorization-server` | JSON with authorization/token endpoints |
+| 3 | Open `https://YOUR-FUNC.azurewebsites.net/oauth/authorize?redirect_uri=http://localhost&state=test` in browser | Redirects to GitHub login |
 
 ---
 
-## 5. Entra ID Configuration
+## Phase 4: Build and Deploy Function App
 
-### 5.1 App registrations created by Terraform
+⏱️ ~10 minutes
 
-| App Registration | Display Name | Audience | Purpose |
-|-----------------|--------------|----------|---------|
-| **cerebro-mcp** | Cerebro MCP Server | Single-tenant (`AzureADMyOrg`) | MCP server OAuth; exposes `api://cerebro-mcp` with `Thoughts.ReadWrite` scope; APIM validates tokens against this |
-| **cerebro-teams-bot** | Cerebro Teams Bot | Multi-tenant (`AzureADMultipleOrgs`) | Teams bot identity (Bot Framework requires multi-tenant) |
-| **cerebro-graph** | Cerebro Calendar | Single-tenant (`AzureADMyOrg`) | Graph API client credentials for calendar events and file downloads |
-
-### 5.2 Post-Terraform manual steps
-
-Terraform creates the app registrations and auto-generates secrets for the Teams Bot and Graph apps, but you still need to:
-
-#### a) Retrieve client secrets from Terraform output or Entra portal
-
-The Teams Bot and Graph app secrets are managed by Terraform (`azuread_application_password`). Retrieve them:
-
-```bash
-# These are sensitive — use -raw to get the actual values
-terraform output -raw teams_bot_app_secret   # if exposed as output
-```
-
-Or navigate to **Entra ID → App registrations → [App] → Certificates & secrets** to view/create secrets.
-
-#### b) Grant admin consent for Graph API permissions
-
-The `cerebro-graph` app requests `Calendars.ReadWrite` as an application permission. An Entra ID admin must grant consent:
-
-1. **Entra ID portal** → **App registrations** → **Cerebro Calendar**
-2. Go to **API permissions**
-3. Click **Grant admin consent for [your tenant]**
-4. Confirm
-
-> If you also need file download support (Teams attachments via SharePoint), add `Sites.Read.All` application permission and grant consent for it as well.
-
-#### c) Register the Teams bot
-
-1. Go to [Azure Portal](https://portal.azure.com) → **Create a resource** → **Azure Bot**
-2. **Bot handle:** `cerebro-teams-bot`
-3. **Type of App:** Multi Tenant
-4. **Use existing app registration:** Yes — paste the `teams_bot_app_id` from Terraform output
-5. **Messaging endpoint:** `https://cerebro-func.azurewebsites.net/api/cerebro-teams`
-6. Under **Channels**, enable **Microsoft Teams**
-
----
-
-## 6. Function App Deployment
-
-### 6.1 Build
+### Step 1: Build
 
 ```bash
 cd functions
 npm install
-npm run build
+npm run build    # compiles TypeScript → dist/
 ```
 
-This compiles TypeScript to `dist/` via `tsc`.
+⚠️ There is no test suite or linter configured. `npm run build` (tsc) is the only validation step.
 
-### 6.2 Deploy to Azure
+### Step 2: Deploy
+
+**Option A: Azure Functions Core Tools** (recommended)
 
 ```bash
-func azure functionapp publish cerebro-func --node
+func azure functionapp publish YOUR-FUNC --node
 ```
 
-### 6.3 Configure environment variables
+**Option B: Kudu ZIP Deploy** (if Core Tools fails)
 
-Most app settings are auto-configured by Terraform. The following **must be set manually** after deployment (Terraform marks them with comments):
+```powershell
+# Windows PowerShell
+$tempDir = New-TemporaryFile | ForEach-Object { Remove-Item $_; mkdir $_ }
+Copy-Item dist, node_modules, host.json, package.json -Destination $tempDir -Recurse
+Push-Location $tempDir
+tar -cf deploy.zip -a *
+Pop-Location
+
+# Get deployment credentials
+$creds = az functionapp deployment list-publishing-credentials `
+  -n YOUR-FUNC -g cerebro-rg `
+  --query "{user:publishingUserName, pass:publishingPassword}" -o json | ConvertFrom-Json
+$pair = "$($creds.user):$($creds.pass)"
+$bytes = [System.Text.Encoding]::ASCII.GetBytes($pair)
+$base64 = [System.Convert]::ToBase64String($bytes)
+
+# Deploy
+Invoke-RestMethod `
+  -Uri "https://YOUR-FUNC.scm.azurewebsites.net/api/zipdeploy" `
+  -Method POST `
+  -Headers @{Authorization="Basic $base64"} `
+  -InFile "$tempDir\deploy.zip" `
+  -ContentType "application/zip"
+```
+
+### Step 3: Set All Environment Variables
 
 ```bash
-# Teams Bot secret (from Entra app registration)
-az functionapp config appsettings set \
-  --name cerebro-func \
-  --resource-group cerebro-rg \
-  --settings "TEAMS_BOT_APP_SECRET=YOUR_TEAMS_BOT_SECRET"
-
-# Graph API secret (from Entra app registration)
-az functionapp config appsettings set \
-  --name cerebro-func \
-  --resource-group cerebro-rg \
-  --settings "GRAPH_CLIENT_SECRET=YOUR_GRAPH_SECRET"
-
-# Calendar user email (whose calendar gets reminder events)
-az functionapp config appsettings set \
-  --name cerebro-func \
-  --resource-group cerebro-rg \
-  --settings "CALENDAR_USER_EMAIL=you@example.com"
-
-# Optional: restrict which Teams users can send messages
-az functionapp config appsettings set \
-  --name cerebro-func \
-  --resource-group cerebro-rg \
-  --settings "TEAMS_ALLOWED_SENDERS=aad-object-id-1,aad-object-id-2"
+az functionapp config appsettings set -n YOUR-FUNC -g cerebro-rg --settings \
+  DATABASE_URL="postgresql://cerebroadmin:PASSWORD@YOUR-DB.postgres.database.azure.com:5432/cerebro?sslmode=require" \
+  AZURE_OPENAI_ENDPOINT="https://YOUR-OPENAI.openai.azure.com" \
+  AZURE_OPENAI_API_KEY="your_openai_key" \
+  AZURE_OPENAI_EMBEDDING_DEPLOYMENT="text-embedding-3-small" \
+  AZURE_OPENAI_CHAT_DEPLOYMENT="gpt-4o-mini" \
+  AZURE_OPENAI_VISION_DEPLOYMENT="gpt-4o" \
+  AZURE_STORAGE_CONNECTION_STRING="your_storage_conn_string" \
+  GITHUB_OAUTH_CLIENT_ID="your_github_oauth_client_id" \
+  GITHUB_OAUTH_CLIENT_SECRET="your_github_oauth_client_secret" \
+  WEBSITE_TIME_ZONE="Central Standard Time"
 ```
 
-#### Complete environment variable reference
+⚠️ Use **deployment names** for Azure OpenAI, not model names. The defaults above match what Terraform provisions.
 
-| Variable | Set By | Description |
-|----------|--------|-------------|
-| `FUNCTIONS_WORKER_RUNTIME` | Terraform | `node` |
-| `WEBSITE_NODE_DEFAULT_VERSION` | Terraform | `~18` |
-| `WEBSITE_TIME_ZONE` | Terraform | `Central Standard Time` (timer triggers use Central Time) |
-| `APPINSIGHTS_INSTRUMENTATIONKEY` | Terraform | Application Insights key |
-| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Terraform | Application Insights connection |
-| `AZURE_OPENAI_ENDPOINT` | Terraform | `https://cerebro-openai.openai.azure.com` |
-| `AZURE_OPENAI_API_KEY` | Terraform | Auto-populated from Cognitive Services |
-| `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | Terraform | `text-embedding-3-small` |
-| `AZURE_OPENAI_CHAT_DEPLOYMENT` | Terraform | `gpt-4o-mini` |
-| `AZURE_OPENAI_VISION_DEPLOYMENT` | Terraform | `gpt-4o` |
-| `DATABASE_URL` | Terraform | PostgreSQL connection string |
-| `AZURE_STORAGE_CONNECTION_STRING` | Terraform | Blob storage connection |
-| `TEAMS_BOT_APP_ID` | Terraform | Teams bot client ID |
-| `TEAMS_BOT_TENANT_ID` | Terraform | Entra tenant ID |
-| `TEAMS_BOT_APP_SECRET` | **Manual** | Teams bot client secret |
-| `GRAPH_TENANT_ID` | Terraform | Entra tenant ID |
-| `GRAPH_CLIENT_ID` | Terraform | Graph app client ID |
-| `GRAPH_CLIENT_SECRET` | **Manual** | Graph app client secret |
-| `CALENDAR_USER_EMAIL` | **Manual** | Target calendar email address |
-| `TEAMS_ALLOWED_SENDERS` | **Manual** (optional) | Comma-separated AAD Object IDs |
+### ✅ Verification Gate 4
 
-### 6.4 Verify endpoints
-
-```bash
-# MCP server (should return SSE or method-not-allowed for GET)
-curl -X POST https://cerebro-func.azurewebsites.net/api/cerebro-mcp
-
-# Teams bot endpoint (expects Bot Framework activity payload)
-curl https://cerebro-func.azurewebsites.net/api/cerebro-teams
-
-# Daily digest (manual trigger)
-curl https://cerebro-func.azurewebsites.net/api/daily-digest
-
-# Weekly digest
-curl https://cerebro-func.azurewebsites.net/api/weekly-digest
-```
+| # | Test | Expected |
+|---|------|----------|
+| 1 | `curl -s -o /dev/null -w "%{http_code}" -X POST https://YOUR-FUNC.azurewebsites.net/cerebro-mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"initialize","id":1}'` | `401` (auth required) |
+| 2 | Authenticate via OAuth, then send `initialize` to `/cerebro-mcp` | Server info with `protocolVersion`, 7 tools listed |
+| 3 | Call `capture_thought` tool via MCP with content `"Hello Cerebro"` | Thought saved, confirmation returned |
+| 4 | Call `search_thoughts` tool for `"Hello Cerebro"` | Found with similarity score |
 
 ---
 
-## 7. APIM MCP Server Setup
+## Phase 5: Connect MCP Client
 
-Azure API Management proxies the MCP endpoint and adds OAuth token validation.
+⏱️ ~2 minutes
 
-### 7.1 Overview
+### VS Code / GitHub Copilot
 
-- **APIM instance:** `cerebro-apim` (Developer_1 tier)
-- **Purpose:** Expose the MCP server with `validate-azure-ad-token` inbound policy so clients authenticate via Entra ID OAuth
-- **Backend:** `https://cerebro-func.azurewebsites.net/api/cerebro-mcp`
-
-### 7.2 Configuration
-
-APIM API operations and policies are configured **post-deploy** via the Azure Portal or Azure CLI (not in Terraform). Key steps:
-
-1. **Create an API** in APIM pointing to the Function App MCP endpoint
-2. **Add inbound policy** — `validate-azure-ad-token` to verify the caller's OAuth token against the `cerebro-mcp` app registration (`api://cerebro-mcp`)
-3. **Configure CORS** to allow MCP client origins
-4. **Set routing** for the MCP SSE/Streamable HTTP transport
-
-> Detailed APIM policy configuration is maintained separately. Refer to the APIM policy reference in the Azure Portal for the current inbound/outbound policies.
-
----
-
-## 8. Teams Bot Registration
-
-### 8.1 Create Azure Bot resource
-
-1. **Azure Portal** → **Create a resource** → search **Azure Bot**
-2. Fill in:
-   - **Bot handle:** `cerebro-teams-bot`
-   - **Pricing tier:** F0 (Free) for development
-   - **Type of App:** Multi Tenant
-   - **App ID:** Use the `teams_bot_app_id` from Terraform output
-   - **App password:** The client secret from the `cerebro-teams-bot` app registration
-3. **Messaging endpoint:** `https://cerebro-func.azurewebsites.net/api/cerebro-teams`
-4. Under **Channels**, click **Microsoft Teams** to enable
-
-### 8.2 Create Teams app manifest
-
-Create a `manifest.json` for sideloading the bot into Teams:
+Add to your MCP configuration (`%APPDATA%\Code\User\mcp.json` on Windows, `~/.config/Code/User/mcp.json` on Mac/Linux):
 
 ```json
 {
-  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
-  "manifestVersion": "1.16",
-  "version": "1.0.0",
-  "id": "TEAMS_BOT_APP_ID",
-  "developer": {
-    "name": "Cerebro",
-    "websiteUrl": "https://cerebro-func.azurewebsites.net",
-    "privacyUrl": "https://cerebro-func.azurewebsites.net/privacy",
-    "termsOfUseUrl": "https://cerebro-func.azurewebsites.net/terms"
-  },
-  "name": {
-    "short": "Cerebro",
-    "full": "Cerebro Knowledge Brain"
-  },
-  "description": {
-    "short": "Personal knowledge capture and recall",
-    "full": "Capture thoughts, ideas, and tasks from Teams. Search your knowledge base with AI-powered semantic search."
-  },
-  "bots": [
-    {
-      "botId": "TEAMS_BOT_APP_ID",
-      "scopes": ["personal", "team"],
-      "commandLists": [
-        {
-          "scopes": ["personal", "team"],
-          "commands": [
-            { "title": "done:", "description": "Mark a task as complete (e.g., done: update the report)" },
-            { "title": "reopen:", "description": "Reopen a completed task (e.g., reopen: fix the login bug)" },
-            { "title": "delete:", "description": "Soft-delete a thought (e.g., delete: old project idea)" }
-          ]
-        }
-      ]
+  "servers": {
+    "cerebro": {
+      "type": "http",
+      "url": "https://YOUR-FUNC.azurewebsites.net/cerebro-mcp"
     }
-  ],
-  "permissions": ["messageTeamMembers"],
-  "validDomains": ["cerebro-func.azurewebsites.net"]
-}
-```
-
-Replace `TEAMS_BOT_APP_ID` with the actual client ID from Terraform output.
-
-### 8.3 Package and install
-
-```bash
-# Create a zip with manifest.json + two icon files (color.png 192x192, outline.png 32x32)
-zip cerebro-teams-app.zip manifest.json color.png outline.png
-```
-
-Upload via **Teams Admin Center** → **Manage apps** → **Upload new app**, or sideload in Teams → **Apps** → **Upload a custom app**.
-
----
-
-## 9. Local Development
-
-### 9.1 Configure local settings
-
-Copy `.env.example` values into `functions/local.settings.json`:
-
-```json
-{
-  "IsEncrypted": false,
-  "Values": {
-    "AzureWebJobsStorage": "",
-    "FUNCTIONS_WORKER_RUNTIME": "node",
-    "AZURE_OPENAI_ENDPOINT": "https://cerebro-openai.openai.azure.com",
-    "AZURE_OPENAI_API_KEY": "YOUR_API_KEY",
-    "AZURE_OPENAI_EMBEDDING_DEPLOYMENT": "text-embedding-3-small",
-    "AZURE_OPENAI_CHAT_DEPLOYMENT": "gpt-4o-mini",
-    "AZURE_OPENAI_VISION_DEPLOYMENT": "gpt-4o",
-    "DATABASE_URL": "postgres://cerebroadmin:YOUR_PASSWORD@cerebro-db.postgres.database.azure.com:5432/cerebro?sslmode=require",
-    "AZURE_STORAGE_CONNECTION_STRING": "YOUR_STORAGE_CONNECTION_STRING",
-    "TEAMS_BOT_APP_ID": "YOUR_BOT_APP_ID",
-    "TEAMS_BOT_APP_SECRET": "YOUR_BOT_SECRET",
-    "TEAMS_BOT_TENANT_ID": "YOUR_ENTRA_TENANT_ID",
-    "GRAPH_TENANT_ID": "YOUR_ENTRA_TENANT_ID",
-    "GRAPH_CLIENT_ID": "YOUR_GRAPH_CLIENT_ID",
-    "GRAPH_CLIENT_SECRET": "YOUR_GRAPH_SECRET",
-    "CALENDAR_USER_EMAIL": "you@example.com"
   }
 }
 ```
 
-> **`local.settings.json` is gitignored.** Never commit this file.
+Reload VS Code (`Ctrl+Shift+P` → "Developer: Reload Window"). The OAuth flow starts automatically:
 
-### 9.2 Start the local dev server
+1. VS Code shows "Dynamic Client Registration not supported" → Click **Copy URIs & Proceed**
+2. Enter your GitHub OAuth App **Client ID**
+3. Browser opens → log in with GitHub → authorize the app
+4. ✅ MCP server connects — 7 tools available in Copilot Chat
 
-```bash
-cd functions
-npm run start    # auto-builds via prestart hook, then runs func start
+### Claude Desktop
+
+Settings → MCP → Add Server → HTTP type → paste:
+```
+https://YOUR-FUNC.azurewebsites.net/cerebro-mcp
 ```
 
-The server starts at `http://localhost:7071`. Available endpoints:
-
-- `POST http://localhost:7071/api/cerebro-mcp` — MCP server
-- `POST http://localhost:7071/api/cerebro-teams` — Teams bot webhook
-- `GET  http://localhost:7071/api/daily-digest` — Daily digest
-- `GET  http://localhost:7071/api/weekly-digest` — Weekly digest
-
-### 9.3 Teams webhook testing with ngrok
-
-The Teams Bot Framework requires a public HTTPS endpoint. Use ngrok to tunnel:
+### Claude Code
 
 ```bash
-ngrok http 7071
+claude mcp add cerebro --transport http https://YOUR-FUNC.azurewebsites.net/cerebro-mcp
 ```
 
-Copy the `https://xxxx.ngrok-free.app` URL and update the bot's messaging endpoint:
+### Available MCP Tools
 
-1. **Azure Portal** → **Azure Bot** → **Configuration**
-2. Set **Messaging endpoint** to `https://xxxx.ngrok-free.app/api/cerebro-teams`
-3. Save
+Once connected, your AI client has access to these 7 tools:
 
-Remember to revert the endpoint to `https://cerebro-func.azurewebsites.net/api/cerebro-teams` when done testing.
+| Tool | Purpose |
+|------|---------|
+| `search_thoughts` | Semantic similarity search across all thoughts |
+| `list_thoughts` | Browse/filter by type, topic, person, time range, status |
+| `thought_stats` | Aggregate stats: totals, type breakdown, top topics/people |
+| `capture_thought` | Save a new thought (auto-embeds, extracts metadata) |
+| `complete_task` | Mark a task as done via semantic matching |
+| `reopen_task` | Reopen a completed task via semantic matching |
+| `delete_task` | Soft-delete a thought via semantic matching |
 
 ---
 
-## 10. Verification Checklist
+## Phase 6: Teams Bot (Optional)
 
-- [ ] `terraform apply` completes successfully (all resources created)
-- [ ] Database migrations run without errors (01 through 04)
-- [ ] `\dx` shows pgvector extension installed
-- [ ] `\dt` shows `thoughts` and `digest_channels` tables
-- [ ] `npm run build` compiles cleanly (no TypeScript errors)
-- [ ] `func azure functionapp publish cerebro-func --node` deploys successfully
-- [ ] MCP endpoint responds to POST requests
-- [ ] Teams bot responds to messages in Teams
-- [ ] `done:` prefix marks a task as complete and bot confirms
-- [ ] Daily digest endpoint returns JSON summary (manual trigger or schedule)
-- [ ] Calendar reminders are created via Graph API when thoughts mention dates
-- [ ] File attachments (images, DOCX) are uploaded to blob storage and analyzed
+⏱️ ~15 minutes
+
+The Teams bot lets you capture thoughts by posting messages in a Teams channel. Every message is automatically embedded, tagged, and stored.
+
+### Quick Setup Summary
+
+1. **Entra ID app registration** — already created by Terraform (see `teams_bot_app_id` output)
+2. **Create Azure Bot resource** — link it to the Entra app registration
+3. **Enable Teams channel** on the bot
+4. **Set function app environment variables:**
+   ```bash
+   az functionapp config appsettings set -n YOUR-FUNC -g cerebro-rg --settings \
+     TEAMS_BOT_APP_ID="your_bot_app_id" \
+     TEAMS_BOT_APP_SECRET="your_bot_app_secret" \
+     TEAMS_BOT_TENANT_ID="your_tenant_id"
+   ```
+5. **Package the Teams app manifest** with bot icons
+6. **Sideload** via Teams Admin Center or developer upload
+
+⚠️ The bot uses a **loop guard** — it rejects messages starting with its own reply prefixes (`**Captured**`, `✅ **Marked done`, `🔄 **Reopened`) to prevent infinite re-trigger loops.
+
+### Teams Message Intents
+
+| Prefix | Action |
+|--------|--------|
+| *(none)* | Capture as a new thought |
+| `done: <description>` | Semantically find and complete matching task |
+| `reopen: <description>` | Semantically find and reopen matching task |
+| `delete: <description>` | Semantically find and soft-delete matching thought |
 
 ---
 
-## Important Notes
+## Phase 7: Email Digest (Optional)
 
-- **Azure OpenAI region:** Deployed to **eastus2** (not centralus) because model availability varies by region. Controlled by the `openai_location` variable.
-- **pgvector must be allowlisted** in the `azure.extensions` server parameter **before** running migrations. Terraform handles this automatically, but verify if troubleshooting.
-- **APIM Developer tier is required** (not Consumption) for the MCP server proxy. The Developer_1 SKU supports the necessary policy features.
-- **Timer triggers use Central Time** — the `WEBSITE_TIME_ZONE=Central Standard Time` app setting ensures cron expressions evaluate in Central Time.
-- **Vector dimension is 1536** (`text-embedding-3-small`). If you change embedding models, you must update:
-  - `infra/database/02-create-thoughts-table.sql` (column definition)
-  - `infra/database/03-create-search-function.sql` (function parameter)
-  - The HNSW index (rebuild with new dimensions)
-- **All migrations are idempotent.** They use `IF NOT EXISTS`, `CREATE OR REPLACE`, and conditional `DO` blocks. Safe to re-run.
-- **Secrets are not stored in Terraform state for security.** The `TEAMS_BOT_APP_SECRET` and `GRAPH_CLIENT_SECRET` must be set manually on the Function App after deployment. The Teams Bot and Graph app registration passwords are managed by Terraform but should be treated as sensitive.
-- **MCP OAuth is handled by APIM**, not by the Function App. The Function App has no MCP auth environment variables — APIM's `validate-azure-ad-token` inbound policy handles token validation before requests reach the function.
+⏱️ ~5 minutes
+
+Email digests send AI-generated summaries of your recent thoughts to your inbox.
+
+### Setup
+
+1. **ACS is provisioned by Terraform** — get the connection string and sender from Terraform outputs:
+   ```bash
+   terraform output -raw acs_connection_string
+   terraform output acs_email_sender
+   ```
+
+2. **Set function app environment variables:**
+   ```bash
+   az functionapp config appsettings set -n YOUR-FUNC -g cerebro-rg --settings \
+     ACS_CONNECTION_STRING="your_acs_connection_string" \
+     ACS_EMAIL_SENDER="DoNotReply@your-domain.azurecomm.net" \
+     DIGEST_EMAIL_RECIPIENT="you@example.com"
+   ```
+
+3. **Test the digest:**
+   ```bash
+   # Daily digest
+   curl "https://YOUR-FUNC.azurewebsites.net/api/daily-digest"
+
+   # Weekly digest
+   curl "https://YOUR-FUNC.azurewebsites.net/api/weekly-digest"
+   ```
+
+### Digest Endpoints
+
+| Endpoint | Scope | Reminders |
+|----------|-------|-----------|
+| `GET /api/daily-digest` | Last 24 hours | Next 48 hours |
+| `GET /api/weekly-digest` | Last 7 days | Next 7 days |
+
+⚠️ The `summary` field (Teams markdown) is capped at ~24KB. If content exceeds this, the full thought list is only included in the `summaryHtml` email field.
+
+---
+
+## Phase 8: Calendar Reminders (Optional)
+
+⏱️ ~5 minutes
+
+If a captured thought mentions a date or time (e.g., "Submit report by Friday"), Cerebro extracts it and can create an Outlook calendar event via Microsoft Graph.
+
+### Setup
+
+1. **Register an Entra ID app** (or reuse the Graph app from Terraform) with `Calendars.ReadWrite` application permission
+2. **Grant admin consent** for the permission
+3. **Set function app environment variables:**
+   ```bash
+   az functionapp config appsettings set -n YOUR-FUNC -g cerebro-rg --settings \
+     GRAPH_TENANT_ID="your_tenant_id" \
+     GRAPH_CLIENT_ID="your_graph_client_id" \
+     GRAPH_CLIENT_SECRET="your_graph_client_secret" \
+     CALENDAR_USER_EMAIL="you@yourdomain.com"
+   ```
+
+Reminders default to **09:00 Central Time** if only a date is given. The current day-of-week is passed to the AI so relative references like "next Wednesday" resolve correctly.
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+**Terraform: Name already taken**
+
+Azure resource names must be globally unique. Add a personal prefix/suffix in `terraform.tfvars`:
+
+```hcl
+postgresql_server_name = "cerebro-yourname-db"
+function_app_name     = "cerebro-yourname-func"
+openai_account_name   = "cerebro-yourname-openai"
+storage_account_name  = "cerebroyournamestor"
+```
+
+**Terraform: APIM hangs for 30+ minutes**
+
+APIM Developer tier provisioning is notoriously slow. Options:
+- Wait it out (can take up to 45 minutes)
+- Use `terraform apply -target=...` to provision other resources first and handle APIM separately
+- Provision APIM via Azure CLI instead
+
+**`func publish` fails with "Value cannot be null"**
+
+Known issue with Core Tools v4.x on some systems. Use the Kudu ZIP deploy method instead (see Phase 4, Option B).
+
+**MCP: "Waiting for server to respond to initialize"**
+
+The function app may be cold-starting (Azure Consumption plan). Wait 30-60 seconds and retry. If persistent:
+```bash
+# Check Application Insights for errors
+az monitor app-insights query -g cerebro-rg --app YOUR-APPINSIGHTS \
+  --analytics-query "exceptions | order by timestamp desc | take 10"
+```
+
+**OAuth: "Dynamic Client Registration not supported"**
+
+This is expected behavior. VS Code shows this because Cerebro uses a pre-registered GitHub OAuth app. Click **Copy URIs & Proceed** and enter your Client ID.
+
+**Database: "extension vector is not available"**
+
+You need to allowlist the extension first:
+1. Azure Portal → PostgreSQL Flexible Server → **Server parameters**
+2. Search `azure.extensions` → add `VECTOR`
+3. Click **Save** → wait for restart
+4. Then re-run `01-enable-pgvector.sql`
+
+**409 Conflict on ZIP deploy**
+
+A previous deployment is stuck. Stop and restart the function app:
+
+```bash
+az functionapp stop -n YOUR-FUNC -g cerebro-rg
+# Wait 30 seconds
+az functionapp start -n YOUR-FUNC -g cerebro-rg
+# Wait 30 seconds, then retry deploy
+```
+
+**"Cannot find module" errors after deploy**
+
+Ensure `node_modules` is included in the deployment package. If using `func publish`, it handles this automatically. For ZIP deploy, verify the zip structure:
+
+```
+deploy.zip/
+├── dist/          # compiled JavaScript
+├── node_modules/  # dependencies
+├── host.json      # Functions runtime config
+└── package.json   # dependency manifest
+```
+
+**Embedding dimension mismatch**
+
+The vector dimension is **1536** (text-embedding-3-small). If you change the embedding model, you must also update:
+- `infra/database/02-create-thoughts-table.sql` — column definition
+- `infra/database/03-create-search-function.sql` — function parameter
+- Any HNSW index definitions
+
+---
+
+## Quick Reference
+
+### Environment Variables Summary
+
+| Variable | Required | Set In |
+|----------|----------|--------|
+| `DATABASE_URL` | ✅ | Phase 4 |
+| `AZURE_OPENAI_ENDPOINT` | ✅ | Phase 4 |
+| `AZURE_OPENAI_API_KEY` | ✅ | Phase 4 |
+| `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | ✅ | Phase 4 |
+| `AZURE_OPENAI_CHAT_DEPLOYMENT` | ✅ | Phase 4 |
+| `AZURE_OPENAI_VISION_DEPLOYMENT` | ✅ | Phase 4 |
+| `AZURE_STORAGE_CONNECTION_STRING` | ✅ | Phase 4 |
+| `GITHUB_OAUTH_CLIENT_ID` | ✅ | Phase 3 |
+| `GITHUB_OAUTH_CLIENT_SECRET` | ✅ | Phase 3 |
+| `WEBSITE_TIME_ZONE` | ✅ | Phase 4 |
+| `TEAMS_BOT_APP_ID` | Teams only | Phase 6 |
+| `TEAMS_BOT_APP_SECRET` | Teams only | Phase 6 |
+| `TEAMS_BOT_TENANT_ID` | Teams only | Phase 6 |
+| `TEAMS_ALLOWED_SENDERS` | Optional | Phase 6 |
+| `GRAPH_TENANT_ID` | Reminders only | Phase 8 |
+| `GRAPH_CLIENT_ID` | Reminders only | Phase 8 |
+| `GRAPH_CLIENT_SECRET` | Reminders only | Phase 8 |
+| `CALENDAR_USER_EMAIL` | Reminders only | Phase 8 |
+| `ACS_CONNECTION_STRING` | Email only | Phase 7 |
+| `ACS_EMAIL_SENDER` | Email only | Phase 7 |
+| `DIGEST_EMAIL_RECIPIENT` | Email only | Phase 7 |
+
+### Function Endpoints
+
+| Endpoint | Method | Auth | Purpose |
+|----------|--------|------|---------|
+| `/cerebro-mcp` | GET, POST | GitHub OAuth | MCP server (7 tools) |
+| `/cerebro-teams` | POST | Bot Framework | Teams webhook |
+| `/api/daily-digest` | GET | Function key | Daily AI summary |
+| `/api/weekly-digest` | GET | Function key | Weekly AI summary |
+| `/.well-known/oauth-protected-resource` | GET | None | OAuth discovery |
+| `/.well-known/oauth-authorization-server` | GET | None | OAuth server metadata |
+| `/oauth/authorize` | GET | None | Start OAuth flow |
+| `/oauth/callback` | GET | None | GitHub OAuth callback |
+| `/oauth/token` | POST | None | Exchange code for token |
+
+### Useful Commands
+
+```bash
+# Build and deploy
+cd functions && npm run build && func azure functionapp publish YOUR-FUNC --node
+
+# Watch mode for local dev
+cd functions && npm run start
+
+# Check function app logs
+az functionapp log tail -n YOUR-FUNC -g cerebro-rg
+
+# Restart function app
+az functionapp restart -n YOUR-FUNC -g cerebro-rg
+
+# View all app settings
+az functionapp config appsettings list -n YOUR-FUNC -g cerebro-rg -o table
+```
