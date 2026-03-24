@@ -58,3 +58,14 @@ output "graph_app_client_id" {
   description = "Application (client) ID of the Cerebro Calendar (Graph) app registration"
   value       = azuread_application.graph.client_id
 }
+
+output "acs_connection_string" {
+  description = "Primary connection string for Azure Communication Services"
+  sensitive   = true
+  value       = azurerm_communication_service.cerebro.primary_connection_string
+}
+
+output "acs_email_sender" {
+  description = "Default sender email address for ACS Email"
+  value       = "DoNotReply@${azurerm_email_communication_service_domain.cerebro.mail_from_sender_domain}"
+}

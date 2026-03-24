@@ -87,6 +87,11 @@ resource "azurerm_windows_function_app" "cerebro" {
     TEAMS_BOT_APP_ID    = azuread_application.teams_bot.client_id
     TEAMS_BOT_TENANT_ID = var.entra_tenant_id
     # TEAMS_BOT_APP_SECRET — set manually or via Key Vault after deploy
+
+    # --- Azure Communication Services / Email ---
+    ACS_CONNECTION_STRING    = azurerm_communication_service.cerebro.primary_connection_string
+    ACS_EMAIL_SENDER         = "DoNotReply@${azurerm_email_communication_service_domain.cerebro.mail_from_sender_domain}"
+    DIGEST_EMAIL_RECIPIENT   = var.digest_email_recipient
   }
 
   tags = {

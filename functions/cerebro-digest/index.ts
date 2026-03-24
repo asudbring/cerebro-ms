@@ -1,5 +1,6 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext, Timer } from '@azure/functions';
 import { getThoughtsSince, getCompletedThoughtsSince, getDigestChannels } from '../lib/database.js';
+import { sendDigestEmail, isEmailConfigured } from '../lib/email.js';
 import { Thought, DigestChannel } from '../lib/types.js';
 
 // --- Timer triggers ---
@@ -62,11 +63,6 @@ async function generateAndDeliverDigest(type: 'daily' | 'weekly', context: Invoc
     return;
   }
 
-  if (channels.length === 0) {
-    context.log('No digest channels registered, skipping delivery');
-    return;
-  }
-
   // Build context for AI summary
   const thoughtList = thoughts.map(t => {
     const meta = t.metadata;
@@ -94,12 +90,30 @@ async function generateAndDeliverDigest(type: 'daily' | 'weekly', context: Invoc
   }
 
   // Deliver to all registered channels
-  for (const channel of channels) {
+  if (channels.length > 0) {
+    for (const channel of channels) {
+      try {
+        await sendTeamsProactiveMessage(channel, message);
+        context.log(`Digest delivered to channel ${channel.teams_conversation_id}`);
+      } catch (err) {
+        context.error(`Failed to deliver digest to channel ${channel.teams_conversation_id}:`, err);
+      }
+    }
+  } else {
+    context.log('No digest channels registered, skipping Teams delivery');
+  }
+
+  // Deliver via email if configured
+  if (isEmailConfigured()) {
     try {
-      await sendTeamsProactiveMessage(channel, message);
-      context.log(`Digest delivered to channel ${channel.teams_conversation_id}`);
+      const htmlMessage = markdownToHtml(message);
+      await sendDigestEmail(
+        `${emoji} Cerebro ${periodLabel} Digest`,
+        htmlMessage,
+      );
+      context.log('Digest email sent');
     } catch (err) {
-      context.error(`Failed to deliver digest to channel ${channel.teams_conversation_id}:`, err);
+      context.error('Failed to send digest email:', err);
     }
   }
 }
@@ -230,4 +244,11 @@ async function sendTeamsProactiveMessage(channel: DigestChannel, message: string
   if (!response.ok) {
     throw new Error(`Failed to send proactive message: ${response.status} ${await response.text()}`);
   }
+}
+
+function markdownToHtml(markdown: string): string {
+  return markdown
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/_(.*?)_/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>\n');
 }

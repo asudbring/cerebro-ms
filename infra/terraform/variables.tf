@@ -95,3 +95,12 @@ variable "entra_tenant_id" {
   type        = string
   default     = "1e1cce84-0637-4693-99d9-27ff18dd65c8"
 }
+
+# -----------------------------------------------------------------------------
+# Email / Digest
+# -----------------------------------------------------------------------------
+variable "digest_email_recipient" {
+  description = "Email address to receive digest summaries"
+  type        = string
+  default     = ""
+}
