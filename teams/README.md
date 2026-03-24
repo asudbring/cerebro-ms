@@ -49,22 +49,22 @@ The bot responds to messages in **personal chat**, **teams**, and **group chats*
 
 ## Azure Bot Registration
 
-The bot is registered as `cerebro-ms-bot` in resource group `cerebro-rg`:
+The bot is registered in your resource group:
 
-- **App ID:** `e15daf64-c71a-4881-96b1-eba30c62031c`
-- **App Type:** MultiTenant
-- **Messaging Endpoint:** `https://cerebro-ms-func.azurewebsites.net/api/cerebro-teams`
+- **App ID:** Your Entra ID app registration client ID
+- **App Type:** SingleTenant
+- **Messaging Endpoint:** `https://YOUR-FUNC.azurewebsites.net/cerebro-teams`
 - **Channel:** Microsoft Teams
 
 To recreate the bot registration:
 
 ```bash
-az bot create --resource-group cerebro-rg --name cerebro-ms-bot \
+az bot create --resource-group cerebro-rg --name YOUR-BOT-NAME \
   --app-type SingleTenant \
-  --appid e15daf64-c71a-4881-96b1-eba30c62031c \
-  --tenant-id 1e1cce84-0637-4693-99d9-27ff18dd65c8 \
-  --endpoint "https://cerebro-ms-func.azurewebsites.net/api/cerebro-teams" \
+  --appid YOUR_BOT_APP_ID \
+  --tenant-id YOUR_ENTRA_TENANT_ID \
+  --endpoint "https://YOUR-FUNC.azurewebsites.net/cerebro-teams" \
   --tags project=cerebro
 
-az bot msteams create --resource-group cerebro-rg --name cerebro-ms-bot
+az bot msteams create --resource-group cerebro-rg --name YOUR-BOT-NAME
 ```

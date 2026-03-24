@@ -3,6 +3,18 @@
 > **This file is the canonical reference for AI coding agents** (GitHub Copilot, Claude Code,
 > Cursor, Windsurf) working on this codebase. Read it before making any changes.
 
+> ⚠️ **Deployer-Provided Configuration Required**
+>
+> This repo is a template — it contains **no hardcoded credentials, subscription IDs, tenant IDs, or personal information**. Before deploying, the user MUST provide:
+> - Azure Subscription ID and Entra ID Tenant ID → `infra/terraform/providers.tf` + `terraform.tfvars`
+> - Globally unique resource names (DB, Function App, OpenAI, Storage) → `terraform.tfvars`
+> - PostgreSQL admin password → `terraform.tfvars`
+> - GitHub OAuth App Client ID + Secret → function app settings
+> - Teams bot App ID + Secret (optional) → function app settings
+> - ACS email config (optional) → function app settings
+>
+> **ASK the user for these values. Do not guess or invent them.** See `docs/05-ai-deployment-guide.md` for the full AI deployment workflow.
+
 ---
 
 ## Project Overview

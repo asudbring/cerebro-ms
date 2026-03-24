@@ -1,0 +1,23 @@
+# Cerebro Terraform Variables — Copy to terraform.tfvars and fill in your values
+# terraform.tfvars is gitignored and will not be committed
+
+# Required — must be globally unique across Azure
+postgresql_server_name   = "cerebro-YOURNAME-db"
+postgresql_admin_password = "YourStrongPassword123!"    # Use a strong password!
+openai_account_name      = "cerebro-YOURNAME-openai"
+function_app_name        = "cerebro-YOURNAME-func"
+storage_account_name     = "cerebroyournamesto"          # Lowercase, no hyphens, 3-24 chars
+
+# Azure region (optional — defaults shown)
+location                 = "centralus"
+resource_group_name      = "cerebro-rg"
+openai_location          = "eastus2"                     # May need different region for model availability
+
+# Entra ID tenant for app registrations (required for Teams bot)
+entra_tenant_id          = "your-entra-tenant-id-guid"
+
+# APIM (optional)
+apim_publisher_email     = "you@example.com"
+
+# Digest email recipient (optional)
+digest_email_recipient   = "you@example.com"

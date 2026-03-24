@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
   "manifestVersion": "1.17",
   "version": "1.0.0",
-  "id": "e15daf64-c71a-4881-96b1-eba30c62031c",
+  "id": "YOUR_BOT_APP_ID",
   "developer": {
-    "name": "Allen Sudbring",
-    "websiteUrl": "https://github.com/allensudbring/cerebro-ms",
-    "privacyUrl": "https://github.com/allensudbring/cerebro-ms",
-    "termsOfUseUrl": "https://github.com/allensudbring/cerebro-ms"
+    "name": "Your Name",
+    "websiteUrl": "https://github.com/YOUR_USER/cerebro-ms",
+    "privacyUrl": "https://github.com/YOUR_USER/cerebro-ms",
+    "termsOfUseUrl": "https://github.com/YOUR_USER/cerebro-ms"
   },
   "name": {
     "short": "Cerebro",
@@ -24,7 +24,7 @@
   "accentColor": "#4B0082",
   "bots": [
     {
-      "botId": "e15daf64-c71a-4881-96b1-eba30c62031c",
+      "botId": "YOUR_BOT_APP_ID",
       "scopes": ["personal", "team", "groupChat"],
       "supportsFiles": true,
       "isNotificationOnly": false,
@@ -50,5 +50,5 @@
     }
   ],
   "permissions": ["messageTeamMembers"],
-  "validDomains": ["cerebro-ms-func.azurewebsites.net"]
+  "validDomains": ["YOUR-FUNC.azurewebsites.net"]
 }

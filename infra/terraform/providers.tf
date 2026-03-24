@@ -18,13 +18,13 @@ terraform {
 }
 
 provider "azurerm" {
-  subscription_id = "7e9e8912-84f2-46b4-a6e4-8d743d1f9ee6"
+  subscription_id = "your-azure-subscription-id"
   features {}
 }
 
-# Entra ID app registrations live in the sudbringlab tenant
+# Entra ID app registrations live in the user's tenant
 provider "azuread" {
-  tenant_id = "1e1cce84-0637-4693-99d9-27ff18dd65c8"
+  tenant_id = "your-entra-tenant-id"
 }
 
 provider "azapi" {}

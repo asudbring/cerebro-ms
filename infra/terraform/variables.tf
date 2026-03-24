@@ -88,12 +88,12 @@ variable "apim_publisher_name" {
 }
 
 # -----------------------------------------------------------------------------
-# Entra ID tenant (sudbringlab)
+# Entra ID tenant
 # -----------------------------------------------------------------------------
 variable "entra_tenant_id" {
-  description = "Entra ID tenant for app registrations (sudbringlab)"
+  description = "Entra ID tenant for app registrations"
   type        = string
-  default     = "1e1cce84-0637-4693-99d9-27ff18dd65c8"
+  default     = ""
 }
 
 # -----------------------------------------------------------------------------

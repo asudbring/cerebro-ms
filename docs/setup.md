@@ -3,6 +3,9 @@
 Complete guide to provisioning, configuring, and deploying Cerebro on Azure.
 From zero to a working personal knowledge base in ~60 minutes.
 
+> ⚠️ **This project is a template — no credentials are included.**
+> You must provide your own Azure subscription, Entra ID tenant, resource names, GitHub OAuth app, and database password. All values go into `terraform.tfvars` (gitignored) and function app settings. See the Credential Tracker below.
+
 ---
 
 ## Before You Start

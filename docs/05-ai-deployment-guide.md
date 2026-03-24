@@ -4,6 +4,21 @@
 
 This document contains everything an AI coding assistant (GitHub Copilot, Claude Code, Cursor, etc.) needs to deploy Cerebro from scratch. Feed this entire document as context to your AI.
 
+> ⚠️ **IMPORTANT — User-Specific Values Required**
+>
+> This project is a template. It ships with **no hardcoded credentials, tenant IDs, subscription IDs, or resource names**. Before deploying, the human user MUST provide:
+>
+> 1. **Azure Subscription ID** — the subscription to deploy resources into
+> 2. **Entra ID Tenant ID** — for app registrations (Bot Framework)
+> 3. **Resource names** — must be globally unique (PostgreSQL, Function App, OpenAI, Storage Account)
+> 4. **PostgreSQL admin password** — a strong password for the database
+> 5. **GitHub OAuth App credentials** — Client ID and Client Secret (registered at github.com/settings/developers)
+> 6. **Email recipient** — for digest delivery (optional)
+>
+> These values go into `infra/terraform/terraform.tfvars` (gitignored) and function app settings. The Terraform variables file (`variables.tf`) has empty defaults — the deployer MUST fill them in. **ASK the human for these values. Do not guess or fabricate them.**
+>
+> Similarly, `infra/terraform/providers.tf` has placeholder values for `subscription_id` and `tenant_id` that MUST be replaced before running `terraform apply`.
+
 ---
 
 ## What You're Deploying
