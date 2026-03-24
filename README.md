@@ -269,7 +269,7 @@ See [`.env.example`](.env.example) for the full list. Key groups:
 
 ## 💡 Inspiration
 
-This project is inspired by the open-source [Cerebro](https://github.com/asudbring/cerebro) and the [Open Brain (OB1)](https://github.com/NateBJones/OB1) project by Nate B. Jones. Cerebro on Azure reimagines the personal knowledge brain concept using entirely Azure-native services.
+This project is inspired by the [Open Brain (OB1)](https://github.com/NateBJones/OB1) project by Nate B. Jones. Cerebro reimagines the personal knowledge brain concept using entirely Azure-native services.
 
 ---
 
