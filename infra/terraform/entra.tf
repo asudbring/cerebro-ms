@@ -10,7 +10,8 @@ resource "azuread_application" "mcp" {
   display_name     = "Cerebro MCP Server"
   sign_in_audience = "AzureADMyOrg"
 
-  identifier_uris = ["api://cerebro-mcp"]
+  # URI must contain tenant ID per org policy
+  identifier_uris = ["api://1e1cce84-0637-4693-99d9-27ff18dd65c8/cerebro-mcp"]
 
   api {
     oauth2_permission_scope {

@@ -2,6 +2,7 @@
   "name": "cerebro-functions",
   "version": "1.0.0",
   "description": "Cerebro on Azure — personal knowledge brain",
+  "main": "dist/app.js",
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",

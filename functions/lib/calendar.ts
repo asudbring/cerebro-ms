@@ -1,5 +1,9 @@
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
+export function isCalendarConfigured(): boolean {
+  return !!(process.env.GRAPH_TENANT_ID && process.env.GRAPH_CLIENT_ID && process.env.GRAPH_CLIENT_SECRET && process.env.CALENDAR_USER_EMAIL);
+}
+
 export async function getGraphToken(): Promise<string> {
   if (cachedToken && Date.now() < cachedToken.expiresAt - 60000) {
     return cachedToken.token;
@@ -10,7 +14,7 @@ export async function getGraphToken(): Promise<string> {
   const clientSecret = process.env.GRAPH_CLIENT_SECRET;
 
   if (!tenantId || !clientId || !clientSecret) {
-    throw new Error("Missing GRAPH_TENANT_ID, GRAPH_CLIENT_ID, or GRAPH_CLIENT_SECRET");
+    throw new Error("Calendar not configured: missing GRAPH_TENANT_ID, GRAPH_CLIENT_ID, or GRAPH_CLIENT_SECRET");
   }
 
   const body = new URLSearchParams({
