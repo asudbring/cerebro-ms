@@ -1,43 +1,89 @@
-# Azure API Management — MCP Server Setup
+# MCP Server Authentication & APIM Setup
 
 ## Overview
-APIM acts as an OAuth proxy for the Cerebro MCP server. It validates Entra ID tokens using the `validate-azure-ad-token` inbound policy before forwarding requests to the Azure Function.
 
-## Prerequisites
-- APIM instance provisioned (Developer tier or above)
-- `cerebro-mcp` Entra ID app registration with an API scope defined
-- Azure Function deployed with the MCP endpoint at `/api/cerebro-mcp`
+The Cerebro MCP server uses **GitHub OAuth 2.1** for authentication, following the MCP specification's required auth flow. The Azure Function acts as both the MCP resource server and the OAuth authorization server, wrapping GitHub as the identity provider.
 
-## Setup Steps
+APIM is **optional** — it can be used as a passthrough proxy for rate limiting, monitoring, or custom domain support, but authentication is handled entirely by the function app itself.
+
+## Authentication Flow
+
+```
+MCP Client → POST /api/cerebro-mcp → 401 (no token)
+           → GET /.well-known/oauth-protected-resource → discovers auth server
+           → GET /.well-known/oauth-authorization-server → discovers endpoints
+           → GET /api/oauth/authorize → 302 redirect to GitHub login
+           → User authorizes on GitHub
+           → GitHub → GET /api/oauth/callback → 302 redirect to MCP client with code
+           → MCP Client → POST /api/oauth/token (code) → GitHub access token
+           → POST /api/cerebro-mcp with Bearer token → validates via GitHub API → MCP response
+```
+
+## Environment Variables
+
+Set these on the Azure Function App (or in `local.settings.json` for local dev):
+
+| Variable | Description |
+|----------|-------------|
+| `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth App client ID |
+| `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth App client secret |
+
+When these variables are **not set**, OAuth is disabled and the MCP endpoint allows unauthenticated access (suitable for local development).
+
+## GitHub OAuth App Setup
+
+1. Go to [GitHub Developer Settings](https://github.com/settings/developers) → OAuth Apps → New OAuth App
+2. Set the **Authorization callback URL** to: `https://cerebro-func.azurewebsites.net/api/oauth/callback`
+3. Copy the Client ID and Client Secret into the function app configuration
+
+## MCP Client Configuration
+
+MCP clients connect directly to the function app:
+
+```
+URL: https://cerebro-func.azurewebsites.net/api/cerebro-mcp
+```
+
+OAuth discovery is automatic via the well-known endpoints. No manual OAuth configuration is needed in the MCP client — compliant clients will discover endpoints and initiate the flow when they receive a 401 response.
+
+## OAuth Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/.well-known/oauth-protected-resource` | GET | RFC 9728 resource metadata |
+| `/.well-known/oauth-authorization-server` | GET | RFC 8414 server metadata |
+| `/api/oauth/authorize` | GET | Redirects to GitHub login |
+| `/api/oauth/callback` | GET | Receives GitHub auth callback |
+| `/api/oauth/token` | POST | Exchanges code for access token |
+
+## APIM Setup (Optional)
+
+APIM can be used as a passthrough proxy in front of the function app. Since the function handles its own auth, APIM does **not** need any token validation policies.
 
 ### 1. Import the MCP API
 In APIM → APIs → Add API → HTTP:
 - Display name: `Cerebro MCP`
-- Web service URL: `https://cerebro-func.azurewebsites.net/api`
+- Web service URL: `https://cerebro-func.azurewebsites.net`
 - API URL suffix: `mcp`
 
 ### 2. Add Operations
-Add operations for the MCP Streamable HTTP transport:
-- **POST** `/cerebro-mcp` — Main MCP communication
-- **GET** `/cerebro-mcp` — SSE endpoint (optional)
-- **DELETE** `/cerebro-mcp` — Session termination
+Add operations for all endpoints:
+- **POST** `/api/cerebro-mcp` — Main MCP communication
+- **GET** `/api/cerebro-mcp` — SSE endpoint (optional)
+- **DELETE** `/api/cerebro-mcp` — Session termination
+- **GET** `/.well-known/oauth-protected-resource` — Resource metadata
+- **GET** `/.well-known/oauth-authorization-server` — Auth server metadata
+- **GET** `/api/oauth/authorize` — OAuth authorize redirect
+- **GET** `/api/oauth/callback` — OAuth callback
+- **POST** `/api/oauth/token` — Token exchange
 
-### 3. Configure OAuth Inbound Policy
-Apply this inbound policy to validate Entra ID tokens:
+### 3. Passthrough Policy
+No token validation is needed — the function handles auth. Use a simple passthrough:
 
 ```xml
 <policies>
     <inbound>
         <base />
-        <validate-azure-ad-token tenant-id="1e1cce84-0637-4693-99d9-27ff18dd65c8">
-            <client-application-ids>
-                <!-- Add authorized MCP client app IDs here -->
-                <application-id>CLIENT_APP_ID</application-id>
-            </client-application-ids>
-            <audiences>
-                <audience>api://cerebro-mcp</audience>
-            </audiences>
-        </validate-azure-ad-token>
     </inbound>
     <backend>
         <base />
@@ -70,15 +116,7 @@ If MCP clients connect from browsers, add CORS policy:
 </cors>
 ```
 
-### 5. MCP Client Configuration
-MCP clients connect to: `https://cerebro-apim.azure-api.net/mcp/cerebro-mcp`
-
-OAuth settings for the client:
-- Authority: `https://login.microsoftonline.com/1e1cce84-0637-4693-99d9-27ff18dd65c8`
-- Scope: `api://cerebro-mcp/.default`
-- Grant type: Authorization Code with PKCE (for interactive clients) or Client Credentials (for server-to-server)
-
 ### Notes
-- APIM Developer tier is required — Consumption tier doesn't support the `validate-azure-ad-token` policy
-- The backend Azure Function uses `authLevel: 'anonymous'` since APIM handles auth
-- Add each authorized MCP client's app registration ID to the `client-application-ids` list
+- The backend Azure Function uses `authLevel: 'anonymous'` — the function handles its own auth via GitHub OAuth
+- When using APIM, update the GitHub OAuth App callback URL to use the APIM domain
+- APIM is useful for rate limiting, analytics, and custom domain support but is not required for auth

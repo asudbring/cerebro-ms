@@ -11,6 +11,7 @@ import {
   updateThoughtStatus,
 } from '../lib/database.js';
 import { getEmbedding, extractMetadata } from '../lib/azure-ai.js';
+import { extractBearerToken, validateGitHubToken, isOAuthConfigured } from '../lib/github-oauth.js';
 
 
 function createMcpServer(): McpServer {
@@ -265,6 +266,36 @@ async function handler(
   request: HttpRequest,
   context: InvocationContext
 ): Promise<HttpResponseInit> {
+  // OAuth validation (skip if not configured, e.g., local dev)
+  if (isOAuthConfigured()) {
+    const authHeader = request.headers.get('authorization');
+    const token = extractBearerToken(authHeader);
+
+    if (!token) {
+      const baseUrl = process.env.WEBSITE_HOSTNAME
+        ? `https://${process.env.WEBSITE_HOSTNAME}`
+        : 'http://localhost:7071';
+      return {
+        status: 401,
+        headers: {
+          'WWW-Authenticate': `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
+        },
+        body: 'Unauthorized',
+      };
+    }
+
+    try {
+      const user = await validateGitHubToken(token);
+      context.log(`MCP request authenticated as GitHub user: ${user.login}`);
+    } catch (err) {
+      return {
+        status: 401,
+        headers: { 'WWW-Authenticate': 'Bearer error="invalid_token"' },
+        body: 'Invalid or expired token',
+      };
+    }
+  }
+
   const server = createMcpServer();
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
