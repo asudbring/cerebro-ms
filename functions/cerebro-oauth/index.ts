@@ -31,7 +31,7 @@ app.http('oauth-protected-resource-metadata', {
 app.http('oauth-protected-resource-metadata-mcp', {
   methods: ['GET'],
   authLevel: 'anonymous',
-  route: '.well-known/oauth-protected-resource/api/cerebro-mcp',
+  route: '.well-known/oauth-protected-resource/cerebro-mcp',
   handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
     if (!isOAuthConfigured()) {
       return { status: 503, body: 'OAuth not configured' };
@@ -95,7 +95,7 @@ app.http('oauth-authorize', {
       // Build GitHub authorization URL
       const githubUrl = new URL('https://github.com/login/oauth/authorize');
       githubUrl.searchParams.set('client_id', clientId);
-      githubUrl.searchParams.set('redirect_uri', `${getBaseUrl()}/api/oauth/callback`);
+      githubUrl.searchParams.set('redirect_uri', `${getBaseUrl()}/oauth/callback`);
       githubUrl.searchParams.set('state', encodedState);
       githubUrl.searchParams.set('scope', scope || 'read:user');
 

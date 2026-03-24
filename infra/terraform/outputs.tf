@@ -54,11 +54,6 @@ output "teams_bot_app_id" {
   value       = azuread_application.teams_bot.client_id
 }
 
-output "graph_app_client_id" {
-  description = "Application (client) ID of the Cerebro Calendar (Graph) app registration"
-  value       = azuread_application.graph.client_id
-}
-
 output "acs_connection_string" {
   description = "Primary connection string for Azure Communication Services"
   sensitive   = true

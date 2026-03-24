@@ -108,7 +108,7 @@ export function extractBearerToken(authHeader: string | null): string | null {
 export function getProtectedResourceMetadata(): object {
   const baseUrl = getBaseUrl();
   return {
-    resource: `${baseUrl}/api/cerebro-mcp`,
+    resource: `${baseUrl}/cerebro-mcp`,
     authorization_servers: [baseUrl],
     scopes_supported: ['read', 'write'],
     bearer_methods_supported: ['header'],
@@ -122,8 +122,8 @@ export function getAuthorizationServerMetadata(): object {
   const baseUrl = getBaseUrl();
   return {
     issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/api/oauth/authorize`,
-    token_endpoint: `${baseUrl}/api/oauth/token`,
+    authorization_endpoint: `${baseUrl}/oauth/authorize`,
+    token_endpoint: `${baseUrl}/oauth/token`,
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code'],
     code_challenge_methods_supported: ['S256'],

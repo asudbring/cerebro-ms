@@ -1,0 +1,54 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "e15daf64-c71a-4881-96b1-eba30c62031c",
+  "developer": {
+    "name": "Allen Sudbring",
+    "websiteUrl": "https://github.com/allensudbring/cerebro-ms",
+    "privacyUrl": "https://github.com/allensudbring/cerebro-ms",
+    "termsOfUseUrl": "https://github.com/allensudbring/cerebro-ms"
+  },
+  "name": {
+    "short": "Cerebro",
+    "full": "Cerebro Knowledge Brain"
+  },
+  "description": {
+    "short": "Personal knowledge base - capture and search thoughts",
+    "full": "Cerebro captures your thoughts, notes, tasks, and ideas via Teams messages. It uses AI to organize, categorize, and make them semantically searchable. Send a message to capture a thought. Use 'done:' prefix to mark tasks complete, 'reopen:' to reopen them."
+  },
+  "icons": {
+    "outline": "outline.png",
+    "color": "color.png"
+  },
+  "accentColor": "#4B0082",
+  "bots": [
+    {
+      "botId": "e15daf64-c71a-4881-96b1-eba30c62031c",
+      "scopes": ["personal", "team", "groupChat"],
+      "supportsFiles": true,
+      "isNotificationOnly": false,
+      "commandLists": [
+        {
+          "scopes": ["personal"],
+          "commands": [
+            {
+              "title": "done",
+              "description": "Mark a task as done (e.g., 'done: update the README')"
+            },
+            {
+              "title": "reopen",
+              "description": "Reopen a completed task (e.g., 'reopen: update the README')"
+            },
+            {
+              "title": "delete",
+              "description": "Delete a thought (e.g., 'delete: old meeting notes')"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": ["messageTeamMembers"],
+  "validDomains": ["cerebro-ms-func.azurewebsites.net"]
+}

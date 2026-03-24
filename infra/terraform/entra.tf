@@ -60,31 +60,3 @@ resource "azuread_application_password" "teams_bot_secret" {
   end_date       = "2026-12-31T00:00:00Z"
 }
 
-# -----------------------------------------------------------------------------
-# 3. cerebro-graph — Graph API access for calendar + file downloads
-# -----------------------------------------------------------------------------
-resource "azuread_application" "graph" {
-  display_name     = "Cerebro Calendar"
-  sign_in_audience = "AzureADMyOrg"
-
-  required_resource_access {
-    resource_app_id = data.azuread_application_published_app_ids.well_known.result["MicrosoftGraph"]
-
-    resource_access {
-      id   = data.azuread_service_principal.msgraph.app_role_ids["Calendars.ReadWrite"]
-      type = "Role" # Application permission
-    }
-  }
-
-  tags = ["cerebro", "graph"]
-}
-
-resource "azuread_service_principal" "graph" {
-  client_id = azuread_application.graph.client_id
-}
-
-resource "azuread_application_password" "graph_secret" {
-  application_id = azuread_application.graph.id
-  display_name   = "terraform-managed"
-  end_date       = "2026-12-31T00:00:00Z"
-}
