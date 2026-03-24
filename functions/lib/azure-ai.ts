@@ -1,0 +1,203 @@
+import { ThoughtMetadata } from './types';
+
+const getConfig = () => ({
+  endpoint: process.env.AZURE_OPENAI_ENDPOINT || '',
+  apiKey: process.env.AZURE_OPENAI_API_KEY || '',
+  embeddingDeployment: process.env.AZURE_OPENAI_EMBEDDING_DEPLOYMENT || '',
+  chatDeployment: process.env.AZURE_OPENAI_CHAT_DEPLOYMENT || '',
+  visionDeployment: process.env.AZURE_OPENAI_VISION_DEPLOYMENT || '',
+});
+
+const API_VERSION = '2024-06-01';
+
+function buildUrl(endpoint: string, deployment: string): string {
+  return `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=${API_VERSION}`;
+}
+
+export async function getEmbedding(text: string): Promise<number[]> {
+  const { endpoint, apiKey, embeddingDeployment } = getConfig();
+  const url = `${endpoint}/openai/deployments/${embeddingDeployment}/embeddings?api-version=${API_VERSION}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input: text, model: embeddingDeployment }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    console.error('Embedding API error:', response.status, body);
+    throw new Error(`Embedding API error: ${response.status} - ${body}`);
+  }
+
+  const data = await response.json();
+  return data.data[0].embedding;
+}
+
+export async function extractMetadata(content: string): Promise<ThoughtMetadata> {
+  const { endpoint, apiKey, chatDeployment } = getConfig();
+  const url = buildUrl(endpoint, chatDeployment);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages: [
+        { role: 'system', content: buildMetadataPrompt() },
+        { role: 'user', content },
+      ],
+      response_format: { type: 'json_object' },
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    console.error('Metadata extraction API error:', response.status, body);
+    return defaultMetadata(content);
+  }
+
+  const data = await response.json();
+  try {
+    const raw = JSON.parse(data.choices[0].message.content);
+    return {
+      title: raw.title || content.slice(0, 50),
+      type: raw.type || 'observation',
+      topics: Array.isArray(raw.topics) ? raw.topics : [],
+      people: Array.isArray(raw.people) ? raw.people : [],
+      action_items: Array.isArray(raw.action_items) ? raw.action_items : [],
+      has_reminder: !!raw.has_reminder,
+      reminder_title: raw.reminder_title || '',
+      reminder_datetime: raw.reminder_datetime || '',
+      has_file: false,
+      file_name: '',
+      file_description: '',
+      source: '' as ThoughtMetadata['source'],
+    };
+  } catch (e) {
+    console.error('Failed to parse metadata response:', e);
+    return defaultMetadata(content);
+  }
+}
+
+function defaultMetadata(content: string): ThoughtMetadata {
+  return {
+    title: content.slice(0, 50),
+    type: 'observation',
+    topics: [],
+    people: [],
+    action_items: [],
+    has_reminder: false,
+    reminder_title: '',
+    reminder_datetime: '',
+    has_file: false,
+    file_name: '',
+    file_description: '',
+    source: '' as ThoughtMetadata['source'],
+  };
+}
+
+function buildMetadataPrompt(): string {
+  const now = new Date();
+  const centralTime = now.toLocaleString('en-US', {
+    timeZone: 'America/Chicago',
+    weekday: 'long',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  return `You are a metadata extraction engine. Extract structured metadata from the user's thought.
+Current date and time: ${centralTime} (Central Time, UTC-6)
+
+Return a JSON object with these fields:
+- title: short descriptive title (2-6 words)
+- type: one of: idea, task, person_note, project_update, meeting_note, decision, reflection, reference, observation
+- topics: array of 1-3 topic tags (lowercase, no hashtags)
+- people: array of person names mentioned (empty if none)
+- action_items: array of action items (empty if none)
+- has_reminder: boolean — true if the thought mentions a specific future date/time
+- reminder_title: short title for calendar event (empty string if no reminder)
+- reminder_datetime: ISO 8601 datetime string with -06:00 offset (empty string if no reminder). Default time is 09:00 if only a date is given. Use the day of week above to resolve relative dates like "Monday", "next Wednesday", etc.
+- has_file: false (file metadata is added by the capture function, not here)
+- file_name: ""
+- file_description: ""
+- source: "" (source is set by the capture function)
+
+Return ONLY the JSON object, no markdown fencing.`;
+}
+
+export async function analyzeImage(base64Data: string, mimeType: string): Promise<string> {
+  const { endpoint, apiKey, visionDeployment } = getConfig();
+  const url = buildUrl(endpoint, visionDeployment);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: 'Describe this image in detail. Extract any text, data, or key information visible.' },
+          {
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Data}` } },
+            ],
+          },
+        ],
+        max_tokens: 1000,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      console.error('Image analysis API error:', response.status, body);
+      return '(Image analysis unavailable)';
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content || '(Image analysis unavailable)';
+  } catch (e) {
+    console.error('Image analysis failed:', e);
+    return '(Image analysis unavailable)';
+  }
+}
+
+export async function analyzeDocument(base64Data: string, mimeType: string, fileName: string): Promise<string> {
+  const { endpoint, apiKey, visionDeployment } = getConfig();
+  const url = buildUrl(endpoint, visionDeployment);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: 'Analyze this document and extract key information, text content, and important details.' },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: `Document: ${fileName}` },
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Data}` } },
+            ],
+          },
+        ],
+        max_tokens: 2000,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      console.error('Document analysis API error:', response.status, body);
+      return '(Document analysis unavailable)';
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content || '(Document analysis unavailable)';
+  } catch (e) {
+    console.error('Document analysis failed:', e);
+    return '(Document analysis unavailable)';
+  }
+}

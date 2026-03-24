@@ -1,0 +1,26 @@
+{
+  "name": "cerebro-functions",
+  "version": "1.0.0",
+  "description": "Cerebro on Azure — personal knowledge brain",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "prestart": "npm run build",
+    "start": "func start"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.6.0",
+    "@azure/openai": "^2.0.0",
+    "@azure/storage-blob": "^12.26.0",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "hono": "^4.7.9",
+    "jose": "^6.0.11",
+    "pg": "^8.13.1",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "^18.x",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.7.0"
+  }
+}

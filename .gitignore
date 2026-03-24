@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build output
+functions/dist/
+
+# Azure Functions local settings
+functions/local.settings.json
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Terraform
+infra/terraform/.terraform/
+infra/terraform/.terraform.lock.hcl
+infra/terraform/terraform.tfstate
+infra/terraform/terraform.tfstate.backup
+infra/terraform/*.tfvars
+!infra/terraform/terraform.tfvars.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Azure Functions
+__azurite_db*__.json
+__blobstorage__
+__queuestorage__
