@@ -1,5 +1,5 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext, Timer } from '@azure/functions';
-import { getThoughtsSince, getCompletedThoughtsSince, getUpcomingReminders, getDigestChannels } from '../lib/database.js';
+import { getThoughtsSince, getCompletedThoughtsSince, getDigestChannels } from '../lib/database.js';
 import { Thought, DigestChannel } from '../lib/types.js';
 
 // --- Timer triggers ---
@@ -50,16 +50,14 @@ async function generateAndDeliverDigest(type: 'daily' | 'weekly', context: Invoc
   const now = new Date();
   const lookbackHours = type === 'daily' ? 24 : 168;
   const since = new Date(now.getTime() - lookbackHours * 60 * 60 * 1000);
-  const reminderHours = type === 'daily' ? 48 : 168;
 
-  const [thoughts, completed, reminders, channels] = await Promise.all([
+  const [thoughts, completed, channels] = await Promise.all([
     getThoughtsSince(since),
     getCompletedThoughtsSince(since),
-    getUpcomingReminders(reminderHours),
     getDigestChannels(),
   ]);
 
-  if (thoughts.length === 0 && completed.length === 0 && reminders.length === 0) {
+  if (thoughts.length === 0 && completed.length === 0) {
     context.log(`No content for ${type} digest, skipping`);
     return;
   }
@@ -80,24 +78,14 @@ async function generateAndDeliverDigest(type: 'daily' | 'weekly', context: Invoc
     return `- ✅ ${meta?.title || 'Untitled'}: ${t.content.substring(0, 150)}`;
   }).join('\n');
 
-  const reminderList = reminders.map(t => {
-    const meta = t.metadata;
-    return `- 📅 ${meta?.reminder_title || meta?.title || 'Reminder'} at ${meta?.reminder_datetime || 'TBD'}`;
-  }).join('\n');
-
   // Generate AI summary
-  const summary = await generateDigestSummary(type, thoughtList, completedList, reminderList, thoughts.length, completed.length);
+  const summary = await generateDigestSummary(type, thoughtList, completedList, thoughts.length, completed.length);
 
   // Build the full digest message
   const periodLabel = type === 'daily' ? 'Daily' : 'Weekly';
   const emoji = type === 'daily' ? '☀️' : '📊';
 
   let message = `${emoji} **Cerebro ${periodLabel} Digest**\n\n${summary}`;
-
-  if (reminders.length > 0) {
-    message += `\n\n**Upcoming Reminders:**\n${reminderList}`;
-  }
-
   message += `\n\n---\n_${thoughts.length} new thoughts, ${completed.length} completed tasks_`;
 
   // Truncate for Teams (~24KB limit)
@@ -122,7 +110,6 @@ async function generateDigestSummary(
   type: 'daily' | 'weekly',
   thoughtList: string,
   completedList: string,
-  reminderList: string,
   thoughtCount: number,
   completedCount: number,
 ): Promise<string> {
@@ -148,10 +135,7 @@ Keep the summary to 3-5 paragraphs. Use markdown formatting. Be conversational b
 ${thoughtList || '(none)'}
 
 Completed tasks (${completedCount}):
-${completedList || '(none)'}
-
-Upcoming reminders:
-${reminderList || '(none)'}`;
+${completedList || '(none)'}`;
 
   const url = `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=2024-06-01`;
 

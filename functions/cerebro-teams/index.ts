@@ -3,7 +3,7 @@ import { validateBotToken, isAllowedSender } from '../lib/auth';
 import { insertThought, findClosestThought, updateThoughtStatus, upsertDigestChannel } from '../lib/database';
 import { getEmbedding, extractMetadata, analyzeImage, analyzeDocument } from '../lib/azure-ai';
 import { uploadFile, generateSasUrl } from '../lib/blob-storage';
-import { createCalendarEvent } from '../lib/calendar';
+
 
 // Bot reply prefixes — loop guard prevents re-processing our own replies
 const BOT_REPLY_PREFIXES = ['**Captured**', '✅ **Marked done', '🔄 **Reopened', '🗑️ **Deleted'];
@@ -130,20 +130,9 @@ async function handleThoughtCapture(text: string, activity: any): Promise<HttpRe
     activity.id, // sourceMessageId for deduplication
   );
 
-  // Create calendar reminder if detected
-  let reminderNote = '';
-  if (metadata.has_reminder && metadata.reminder_datetime && metadata.reminder_title) {
-    try {
-      await createCalendarEvent(metadata.reminder_title, metadata.reminder_datetime);
-      reminderNote = `\n📅 Reminder: ${metadata.reminder_title} at ${metadata.reminder_datetime}`;
-    } catch (err) {
-      console.error('Calendar event creation failed:', err);
-    }
-  }
-
   const title = metadata.title || 'Untitled';
   const topics = metadata.topics?.length ? ` [${metadata.topics.join(', ')}]` : '';
-  const reply = `**Captured:** ${title} (${metadata.type || 'thought'})${topics}${reminderNote}`;
+  const reply = `**Captured:** ${title} (${metadata.type || 'thought'})${topics}`;
 
   await sendTeamsReply(activity, reply);
 

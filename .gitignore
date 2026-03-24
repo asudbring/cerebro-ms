@@ -35,3 +35,6 @@ Thumbs.db
 __azurite_db*__.json
 __blobstorage__
 __queuestorage__
+
+nul
+

@@ -5,9 +5,6 @@ export interface ThoughtMetadata {
   topics: string[];
   people: string[];
   action_items: string[];
-  has_reminder: boolean;
-  reminder_title: string;
-  reminder_datetime: string; // ISO 8601
   has_file: boolean;
   file_name: string;
   file_description: string;
@@ -47,11 +44,4 @@ export interface DigestChannel {
 // Embedding result from Azure OpenAI
 export interface EmbeddingResult {
   embedding: number[];
-}
-
-// Calendar event creation request
-export interface CalendarEvent {
-  title: string;
-  datetime: string; // ISO 8601
-  userEmail: string;
 }

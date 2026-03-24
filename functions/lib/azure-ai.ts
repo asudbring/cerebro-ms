@@ -65,9 +65,6 @@ export async function extractMetadata(content: string): Promise<ThoughtMetadata>
       topics: Array.isArray(raw.topics) ? raw.topics : [],
       people: Array.isArray(raw.people) ? raw.people : [],
       action_items: Array.isArray(raw.action_items) ? raw.action_items : [],
-      has_reminder: !!raw.has_reminder,
-      reminder_title: raw.reminder_title || '',
-      reminder_datetime: raw.reminder_datetime || '',
       has_file: false,
       file_name: '',
       file_description: '',
@@ -86,9 +83,6 @@ function defaultMetadata(content: string): ThoughtMetadata {
     topics: [],
     people: [],
     action_items: [],
-    has_reminder: false,
-    reminder_title: '',
-    reminder_datetime: '',
     has_file: false,
     file_name: '',
     file_description: '',
@@ -118,9 +112,6 @@ Return a JSON object with these fields:
 - topics: array of 1-3 topic tags (lowercase, no hashtags)
 - people: array of person names mentioned (empty if none)
 - action_items: array of action items (empty if none)
-- has_reminder: boolean — true if the thought mentions a specific future date/time
-- reminder_title: short title for calendar event (empty string if no reminder)
-- reminder_datetime: ISO 8601 datetime string with -06:00 offset (empty string if no reminder). Default time is 09:00 if only a date is given. Use the day of week above to resolve relative dates like "Monday", "next Wednesday", etc.
 - has_file: false (file metadata is added by the capture function, not here)
 - file_name: ""
 - file_description: ""

@@ -227,17 +227,3 @@ export async function getCompletedThoughtsSince(since: Date): Promise<Thought[]>
   );
   return result.rows as Thought[];
 }
-
-export async function getUpcomingReminders(withinHours: number): Promise<Thought[]> {
-  const result = await getPool().query(
-    `SELECT id, content, metadata, status, file_url, file_type, source_message_id, created_at, updated_at
-     FROM thoughts
-     WHERE status = 'open'
-       AND metadata->>'has_reminder' = 'true'
-       AND (metadata->>'reminder_datetime')::timestamptz >= now()
-       AND (metadata->>'reminder_datetime')::timestamptz <= now() + $1::interval
-     ORDER BY (metadata->>'reminder_datetime')::timestamptz ASC`,
-    [`${withinHours} hours`]
-  );
-  return result.rows as Thought[];
-}

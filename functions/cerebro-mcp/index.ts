@@ -11,7 +11,7 @@ import {
   updateThoughtStatus,
 } from '../lib/database.js';
 import { getEmbedding, extractMetadata } from '../lib/azure-ai.js';
-import { createCalendarEvent } from '../lib/calendar.js';
+
 
 function createMcpServer(): McpServer {
   const server = new McpServer({
@@ -164,17 +164,6 @@ function createMcpServer(): McpServer {
 
       const thought = await insertThought(content, embedding, metadata);
 
-      let reminderNote = '';
-      if (metadata.has_reminder && metadata.reminder_datetime && metadata.reminder_title) {
-        try {
-          await createCalendarEvent(metadata.reminder_title, metadata.reminder_datetime);
-          reminderNote = `\n📅 Calendar reminder created: ${metadata.reminder_title} at ${metadata.reminder_datetime}`;
-        } catch (err) {
-          console.error('Failed to create calendar event:', err);
-          reminderNote = '\n⚠️ Calendar reminder detected but event creation failed.';
-        }
-      }
-
       const title = metadata.title || 'Untitled';
       const topics = metadata.topics?.length ? ` [${metadata.topics.join(', ')}]` : '';
       const people = metadata.people?.length ? ` 👤 ${metadata.people.join(', ')}` : '';
@@ -182,7 +171,7 @@ function createMcpServer(): McpServer {
       return {
         content: [{
           type: 'text' as const,
-          text: `✅ Captured: **${title}** (${metadata.type || 'thought'})${topics}${people}${reminderNote}`,
+          text: `✅ Captured: **${title}** (${metadata.type || 'thought'})${topics}${people}`,
         }],
       };
     }

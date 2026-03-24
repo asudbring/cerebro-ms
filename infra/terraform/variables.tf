@@ -67,12 +67,6 @@ variable "function_app_name" {
   default     = "cerebro-func"
 }
 
-variable "calendar_user_email" {
-  description = "Email address of the user whose calendar receives reminder events"
-  type        = string
-  default     = ""
-}
-
 # -----------------------------------------------------------------------------
 # API Management
 # -----------------------------------------------------------------------------

@@ -87,14 +87,6 @@ resource "azurerm_windows_function_app" "cerebro" {
     TEAMS_BOT_APP_ID    = azuread_application.teams_bot.client_id
     TEAMS_BOT_TENANT_ID = var.entra_tenant_id
     # TEAMS_BOT_APP_SECRET — set manually or via Key Vault after deploy
-
-    # --- Graph API (calendar / file downloads) ---
-    GRAPH_TENANT_ID = var.entra_tenant_id
-    GRAPH_CLIENT_ID = azuread_application.graph.client_id
-    # GRAPH_CLIENT_SECRET — set manually or via Key Vault after deploy
-
-    # --- Calendar ---
-    CALENDAR_USER_EMAIL = var.calendar_user_email
   }
 
   tags = {
