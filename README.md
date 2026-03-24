@@ -1,5 +1,9 @@
 # 🧠 Cerebro — Your Brain in the Azure Cloud
 
+<p align="center">
+  <img src="docs/images/cerebro-logo.png" alt="Cerebro Logo" width="200">
+</p>
+
 > A personal knowledge base built entirely on Azure. Capture thoughts from any MCP-compatible AI client or Microsoft Teams, embed them with Azure OpenAI, store in PostgreSQL with pgvector, and let any AI assistant search your memory. Includes task management, file attachments, and AI-powered daily/weekly digests delivered by email.
 
 [![Azure Functions](https://img.shields.io/badge/Azure_Functions-v4-0062AD?logo=azure-functions)](https://learn.microsoft.com/azure/azure-functions/)
@@ -23,7 +27,7 @@
 
 ## 🏗️ Architecture
 
-```
+```text
 ┌──────────────┐                  ┌──────────────────┐       ┌────────────────────┐
 │  MCP Client  │─── OAuth 2.1 ──▶│  Azure Function  │──────▶│  PostgreSQL        │
 │  (any AI)    │  GitHub login    │  cerebro-mcp     │       │  pgvector (1536d)  │
@@ -181,7 +185,7 @@ func azure functionapp publish cerebro-func --node
 
 ## 📁 Project Structure
 
-```
+```text
 cerebro-ms/
 ├── functions/                        # Azure Functions v4 (TypeScript, Node 20)
 │   ├── app.ts                        # Entry point — imports all function modules

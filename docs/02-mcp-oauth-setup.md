@@ -7,6 +7,7 @@ The Cerebro MCP server uses **GitHub OAuth 2.1** for authentication. The Azure F
 > 🔑 No API keys needed — users authenticate via browser-based GitHub login.
 
 **Key points:**
+
 - OAuth 2.1 with PKCE (Proof Key for Code Exchange)
 - GitHub is the identity provider
 - The function app handles all OAuth endpoints
@@ -16,7 +17,7 @@ The Cerebro MCP server uses **GitHub OAuth 2.1** for authentication. The Azure F
 
 ## How the OAuth Flow Works
 
-```
+```text
 ┌──────────┐                    ┌──────────────┐                   ┌──────────┐
 │ MCP      │                    │ Azure        │                   │ GitHub   │
 │ Client   │                    │ Function App │                   │ OAuth    │
@@ -99,7 +100,7 @@ The Cerebro MCP server uses **GitHub OAuth 2.1** for authentication. The Azure F
 
 ## Step 1: Register a GitHub OAuth App
 
-1. Go to **https://github.com/settings/developers**
+1. Go to **<https://github.com/settings/developers>**
 2. Click **"OAuth Apps"** → **"New OAuth App"**
 3. Fill in the form:
 
@@ -110,9 +111,9 @@ The Cerebro MCP server uses **GitHub OAuth 2.1** for authentication. The Azure F
 | Application description | _(optional)_ Personal knowledge base |
 | Authorization callback URL | `https://YOUR-FUNC.azurewebsites.net/oauth/callback` |
 
-4. Click **"Register application"**
-5. Copy the **Client ID** (starts with `Ov23li...`)
-6. Click **"Generate a new client secret"** → copy it immediately
+1. Click **"Register application"**
+2. Copy the **Client ID** (starts with `Ov23li...`)
+3. Click **"Generate a new client secret"** → copy it immediately
 
 > ⚠️ The client secret is only shown once. Store it securely.
 
@@ -157,6 +158,7 @@ curl -s https://YOUR-FUNC.azurewebsites.net/.well-known/oauth-protected-resource
 ```
 
 Expected response:
+
 ```json
 {
   "resource": "https://YOUR-FUNC.azurewebsites.net",
@@ -206,6 +208,7 @@ Add to your VS Code `settings.json` or `.vscode/mcp.json`:
 > VS Code auto-discovers OAuth endpoints via the well-known URLs. No API key needed.
 
 When you first use the server, VS Code will:
+
 1. Open a browser window for GitHub login
 2. You authorize the app
 3. Token is cached — subsequent requests are automatic
@@ -283,6 +286,7 @@ The function app is experiencing a **cold start**. Azure Functions can take 30�
 Your GitHub token may have been revoked or expired.
 
 **Fix:** Re-authenticate by:
+
 1. Removing the cached token in your MCP client
 2. Reconnecting — the client will re-trigger the OAuth browser flow
 
@@ -291,7 +295,8 @@ Your GitHub token may have been revoked or expired.
 The callback URL configured in GitHub must **exactly match** the one the function app uses.
 
 **Fix:** Ensure the callback URL in GitHub OAuth App settings is:
-```
+
+```text
 https://YOUR-FUNC.azurewebsites.net/oauth/callback
 ```
 
@@ -310,6 +315,7 @@ az functionapp log tail -n YOUR-FUNC -g cerebro-rg --filter "oauth"
 Azure API Management can sit in front of the function app as a **passthrough proxy** for rate limiting and monitoring. Authentication is handled entirely by the function app — APIM does not participate in the OAuth flow.
 
 If using APIM:
+
 - Configure a simple passthrough policy (no auth transformation)
 - Point the MCP client URL to the APIM endpoint instead
 - Update the GitHub OAuth callback URL to use the APIM domain

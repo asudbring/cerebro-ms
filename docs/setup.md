@@ -33,7 +33,7 @@ From zero to a working personal knowledge base in ~60 minutes.
 
 ### Architecture Overview
 
-```
+```text
 ┌─────────────┐     ┌──────────────┐     ┌───────────────────┐
 │ MCP Client  │────▶│              │────▶│ Azure Database for│
 │ (VS Code,   │     │ Azure        │     │ PostgreSQL        │
@@ -55,6 +55,7 @@ From zero to a working personal knowledge base in ~60 minutes.
 ```
 
 **Functions:**
+
 - **cerebro-mcp** — MCP server with 7 tools (search, browse, stats, capture, complete, reopen, delete)
 - **cerebro-teams** — Teams bot webhook: captures thoughts, handles `done:`/`reopen:`/`delete:` intents
 - **cerebro-digest** — Daily and weekly AI-generated summaries via HTTP GET
@@ -64,7 +65,7 @@ From zero to a working personal knowledge base in ~60 minutes.
 
 Copy this template somewhere safe. Fill in values as you complete each phase.
 
-```
+```text
 # Cerebro Credentials — KEEP SECRET
 
 ## Azure
@@ -154,6 +155,7 @@ terraform apply   # type 'yes' to confirm
 ```
 
 This creates:
+
 - Resource Group
 - PostgreSQL Flexible Server (with `cerebro` database)
 - Azure OpenAI account + model deployments (text-embedding-3-small, gpt-4o-mini, gpt-4o)
@@ -264,7 +266,7 @@ run().catch(e => { console.error(e); process.exit(1); });
 "
 ```
 
-**Option C: Azure Data Studio / pgAdmin**
+#### Option C: Azure Data Studio / pgAdmin
 
 Connect with your credentials and run each `.sql` file in order from the `infra/database/` directory.
 
@@ -424,7 +426,8 @@ Reload VS Code (`Ctrl+Shift+P` → "Developer: Reload Window"). The OAuth flow s
 ### Claude Desktop
 
 Settings → MCP → Add Server → HTTP type → paste:
-```
+
+```text
 https://YOUR-FUNC.azurewebsites.net/cerebro-mcp
 ```
 
@@ -462,12 +465,14 @@ The Teams bot lets you capture thoughts by posting messages in a Teams channel. 
 2. **Create Azure Bot resource** — link it to the Entra app registration
 3. **Enable Teams channel** on the bot
 4. **Set function app environment variables:**
+
    ```bash
    az functionapp config appsettings set -n YOUR-FUNC -g cerebro-rg --settings \
      TEAMS_BOT_APP_ID="your_bot_app_id" \
      TEAMS_BOT_APP_SECRET="your_bot_app_secret" \
      TEAMS_BOT_TENANT_ID="your_tenant_id"
    ```
+
 5. **Package the Teams app manifest** with bot icons
 6. **Sideload** via Teams Admin Center or developer upload
 
@@ -493,12 +498,14 @@ Email digests send AI-generated summaries of your recent thoughts to your inbox.
 ### Setup
 
 1. **ACS is provisioned by Terraform** — get the connection string and sender from Terraform outputs:
+
    ```bash
    terraform output -raw acs_connection_string
    terraform output acs_email_sender
    ```
 
 2. **Set function app environment variables:**
+
    ```bash
    az functionapp config appsettings set -n YOUR-FUNC -g cerebro-rg --settings \
      ACS_CONNECTION_STRING="your_acs_connection_string" \
@@ -507,6 +514,7 @@ Email digests send AI-generated summaries of your recent thoughts to your inbox.
    ```
 
 3. **Test the digest:**
+
    ```bash
    # Daily digest
    curl "https://YOUR-FUNC.azurewebsites.net/api/daily-digest"
@@ -532,11 +540,12 @@ Email digests send AI-generated summaries of your recent thoughts to your inbox.
 
 If a captured thought mentions a date or time (e.g., "Submit report by Friday"), Cerebro extracts it and can create an Outlook calendar event via Microsoft Graph.
 
-### Setup
+### Calendar Reminder Setup
 
 1. **Register an Entra ID app** (or reuse the Graph app from Terraform) with `Calendars.ReadWrite` application permission
 2. **Grant admin consent** for the permission
 3. **Set function app environment variables:**
+
    ```bash
    az functionapp config appsettings set -n YOUR-FUNC -g cerebro-rg --settings \
      GRAPH_TENANT_ID="your_tenant_id" \
@@ -553,7 +562,7 @@ Reminders default to **09:00 Central Time** if only a date is given. The current
 
 ### Common Issues
 
-**Terraform: Name already taken**
+#### Terraform: Name already taken
 
 Azure resource names must be globally unique. Add a personal prefix/suffix in `terraform.tfvars`:
 
@@ -564,39 +573,42 @@ openai_account_name   = "cerebro-yourname-openai"
 storage_account_name  = "cerebroyournamestor"
 ```
 
-**Terraform: APIM hangs for 30+ minutes**
+#### Terraform: APIM hangs for 30+ minutes
 
 APIM Developer tier provisioning is notoriously slow. Options:
+
 - Wait it out (can take up to 45 minutes)
 - Use `terraform apply -target=...` to provision other resources first and handle APIM separately
 - Provision APIM via Azure CLI instead
 
-**`func publish` fails with "Value cannot be null"**
+#### `func publish` fails with "Value cannot be null"
 
 Known issue with Core Tools v4.x on some systems. Use the Kudu ZIP deploy method instead (see Phase 4, Option B).
 
-**MCP: "Waiting for server to respond to initialize"**
+#### MCP: "Waiting for server to respond to initialize"
 
 The function app may be cold-starting (Azure Consumption plan). Wait 30-60 seconds and retry. If persistent:
+
 ```bash
 # Check Application Insights for errors
 az monitor app-insights query -g cerebro-rg --app YOUR-APPINSIGHTS \
   --analytics-query "exceptions | order by timestamp desc | take 10"
 ```
 
-**OAuth: "Dynamic Client Registration not supported"**
+#### OAuth: "Dynamic Client Registration not supported"
 
 This is expected behavior. VS Code shows this because Cerebro uses a pre-registered GitHub OAuth app. Click **Copy URIs & Proceed** and enter your Client ID.
 
-**Database: "extension vector is not available"**
+#### Database: "extension vector is not available"
 
 You need to allowlist the extension first:
+
 1. Azure Portal → PostgreSQL Flexible Server → **Server parameters**
 2. Search `azure.extensions` → add `VECTOR`
 3. Click **Save** → wait for restart
 4. Then re-run `01-enable-pgvector.sql`
 
-**409 Conflict on ZIP deploy**
+#### 409 Conflict on ZIP deploy
 
 A previous deployment is stuck. Stop and restart the function app:
 
@@ -607,11 +619,11 @@ az functionapp start -n YOUR-FUNC -g cerebro-rg
 # Wait 30 seconds, then retry deploy
 ```
 
-**"Cannot find module" errors after deploy**
+#### "Cannot find module" errors after deploy
 
 Ensure `node_modules` is included in the deployment package. If using `func publish`, it handles this automatically. For ZIP deploy, verify the zip structure:
 
-```
+```text
 deploy.zip/
 ├── dist/          # compiled JavaScript
 ├── node_modules/  # dependencies
@@ -619,9 +631,10 @@ deploy.zip/
 └── package.json   # dependency manifest
 ```
 
-**Embedding dimension mismatch**
+#### Embedding dimension mismatch
 
 The vector dimension is **1536** (text-embedding-3-small). If you change the embedding model, you must also update:
+
 - `infra/database/02-create-thoughts-table.sql` — column definition
 - `infra/database/03-create-search-function.sql` — function parameter
 - Any HNSW index definitions

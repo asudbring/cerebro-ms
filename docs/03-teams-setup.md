@@ -7,6 +7,7 @@ The Cerebro Teams bot captures thoughts, manages tasks, and processes file attac
 > 💬 Send any message to capture a thought. Prefix with `done:`, `reopen:`, or `delete:` for task management.
 
 **Key points:**
+
 - Bot Framework handles auth (Entra ID JWT validation)
 - File attachments are downloaded from SharePoint via Graph API
 - Conversations are auto-registered for daily/weekly digest delivery
@@ -54,12 +55,12 @@ The Cerebro Teams bot captures thoughts, manages tasks, and processes file attac
 | Supported account types | **Single tenant** |
 | Redirect URI | _(leave blank)_ |
 
-3. Click **Register**
-4. Note the **Application (client) ID** — you'll need this as the Bot App ID
-5. Go to **Certificates & Secrets** → **New client secret**
+1. Click **Register**
+2. Note the **Application (client) ID** — you'll need this as the Bot App ID
+3. Go to **Certificates & Secrets** → **New client secret**
    - Description: `cerebro-bot-secret`
    - Expiry: 24 months (or your preference)
-6. Copy the **secret value** immediately
+4. Copy the **secret value** immediately
 
 > ⚠️ The secret value is only shown once. Store it securely.
 
@@ -109,7 +110,7 @@ az bot msteams create \
 | Microsoft App ID | _(paste your Entra app ID)_ |
 | Messaging endpoint | `https://YOUR-FUNC.azurewebsites.net/cerebro-teams` |
 
-3. After creation, go to **Channels** → **Microsoft Teams** → **Apply**
+1. After creation, go to **Channels** → **Microsoft Teams** → **Apply**
 
 ---
 
@@ -212,7 +213,7 @@ cd teams && zip cerebro-teams.zip manifest.json color.png outline.png
 
 For organization-wide deployment:
 
-1. Go to **https://admin.teams.microsoft.com**
+1. Go to **<https://admin.teams.microsoft.com>**
 2. Navigate to **Teams apps** → **Manage apps**
 3. Click **⬆ Upload new app**
 4. Select `teams/cerebro-teams.zip`
@@ -241,30 +242,30 @@ For individual use or testing:
 3. Send: `Testing the Cerebro bot — this is my first captured thought`
 4. ✅ Bot should reply with:
 
-```
+```text
 **Captured:** Testing Cerebro bot (reflection) [cerebro, testing]
 ```
 
 ### 🧪 Task Management
 
-5. Send: `done: testing the cerebro bot`
-6. ✅ Bot should reply with:
+1. Send: `done: testing the cerebro bot`
+2. ✅ Bot should reply with:
 
-```
+```text
 ✅ **Marked done:** Testing Cerebro bot (similarity: 0.92)
 ```
 
-7. Send: `reopen: testing the cerebro bot`
-8. ✅ Bot should reply with:
+1. Send: `reopen: testing the cerebro bot`
+2. ✅ Bot should reply with:
 
-```
+```text
 🔄 **Reopened:** Testing Cerebro bot
 ```
 
 ### 🧪 File Attachment
 
-9. Send an image to the bot with a caption
-10. ✅ Bot should analyze the image and capture the thought with file context
+1. Send an image to the bot with a caption
+2. ✅ Bot should analyze the image and capture the thought with file context
 
 ---
 
@@ -292,6 +293,7 @@ Run through this checklist to confirm the bot is working end-to-end:
 - **Check env vars:** Verify `TEAMS_BOT_APP_ID` and `TEAMS_BOT_APP_SECRET` are set correctly on the function app
 - **Check endpoint:** The messaging endpoint must be `https://YOUR-FUNC.azurewebsites.net/cerebro-teams`
 - **Check logs:**
+
   ```bash
   az functionapp log tail -n YOUR-FUNC -g cerebro-rg --filter "teams"
   ```

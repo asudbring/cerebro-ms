@@ -2,10 +2,11 @@
 
 > **This file is the canonical reference for AI coding agents** (GitHub Copilot, Claude Code,
 > Cursor, Windsurf) working on this codebase. Read it before making any changes.
-
+>
 > ⚠️ **Deployer-Provided Configuration Required**
 >
 > This repo is a template — it contains **no hardcoded credentials, subscription IDs, tenant IDs, or personal information**. Before deploying, the user MUST provide:
+>
 > - Azure Subscription ID and Entra ID Tenant ID → `infra/terraform/providers.tf` + `terraform.tfvars`
 > - Globally unique resource names (DB, Function App, OpenAI, Storage) → `terraform.tfvars`
 > - PostgreSQL admin password → `terraform.tfvars`
@@ -88,7 +89,7 @@ and `app.timer()` (Azure Functions v4 programming model).
 
 ### Data Flow
 
-```
+```text
 Teams Message → Power Automate / Bot Framework → cerebro-teams
                                                       ↓
 MCP Client (Copilot CLI, etc.) → cerebro-oauth → cerebro-mcp
@@ -127,6 +128,7 @@ MCP Client (Copilot CLI, etc.) → cerebro-oauth → cerebro-mcp
 | `updated_at` | `timestamptz` | Auto-updated via database trigger |
 
 **Indexes:**
+
 - HNSW on `embedding` (cosine distance) — primary search index
 - GIN on `metadata` — JSON field queries
 - B-tree on `status` — filter by open/done/deleted
@@ -220,12 +222,15 @@ The Teams endpoint validates JWT tokens issued by the Bot Connector service usin
 ## Key Conventions
 
 ### Parallel Processing
+
 Embedding generation and metadata extraction **always run in parallel** via `Promise.all()`.
 Never make them sequential — this is a core performance invariant.
 
 ### Loop Guard (Teams)
+
 `cerebro-teams` rejects messages starting with bot reply prefixes to prevent infinite loops
 when the bot's own replies trigger re-processing:
+
 - `**Captured**`
 - `✅ **Marked done`
 - `🔄 **Reopened`
@@ -234,28 +239,33 @@ when the bot's own replies trigger re-processing:
 Any new capture source must implement a similar loop guard.
 
 ### MCP Tool Registration
+
 Use `(server as any).tool()` instead of `server.tool()` to avoid TypeScript error TS2589
 (deep type instantiation). This is caused by Zod v3/v4 schema inference interacting with
 the MCP SDK's generic types.
 
 ### Task Management
+
 - **`done:` prefix** → generates embedding → finds closest open task by vector similarity → marks it done
 - **`reopen:` prefix** → generates embedding → finds closest done task → marks it open
 - **`delete:` prefix** → generates embedding → finds closest open task → marks it deleted
 
 ### Reminder Extraction
+
 The metadata extraction prompt includes the current datetime with day-of-week in Central Time
 (e.g., `"Friday, 2026-03-06T19:28:00.000-06:00"`). This allows the AI to correctly resolve
 relative date references like "next Monday" or "this Wednesday". Default time is 09:00 CT
 when only a date is mentioned.
 
 ### Digest Delivery
+
 - **Daily digest:** Timer fires at 6 AM CT. Queries last 24h thoughts + completed tasks + upcoming reminders (48h).
 - **Weekly digest:** Timer fires at noon Sunday CT. Queries last 7 days + themes.
 - **Summary cap:** The `summary` field (Teams markdown) is capped at ~24KB. If exceeded, the thought list is omitted but the AI summary is preserved.
 - **Channels:** Digests are sent to all registered channels in `digest_channels` table + email if configured.
 
 ### File Attachments
+
 - Files uploaded via Teams are stored in Azure Blob Storage (`cerebro-files` container)
 - Images are analyzed by gpt-4o vision; DOCX files are parsed with `mammoth`
 - Teams stores files on SharePoint with auth-protected URLs — downloads require Graph API client credentials (`Sites.Read.All` permission)
@@ -263,10 +273,12 @@ when only a date is mentioned.
 - SAS URLs have 1-year expiry
 
 ### Route Configuration
+
 `host.json` sets `routePrefix` to `""` (empty string) so OAuth `.well-known` routes serve at
 the domain root. **Do not change this** — it will break all OAuth discovery.
 
 ### Package Size
+
 The deployment package must stay under ~20MB for reliable deployment.
 **Do not install** `pdf-parse` or `pdfjs-dist` (36MB combined).
 
@@ -311,7 +323,7 @@ The deployment package must stay under ~20MB for reliable deployment.
 
 ## Project Structure
 
-```
+```text
 cerebro-ms/
 ├── AGENTS.md                          ← You are here
 ├── README.md                          ← User-facing project overview
@@ -363,34 +375,41 @@ The MCP server (`cerebro-mcp/index.ts`) exposes 7 tools via Streamable HTTP:
 ## Quick Reference for Common Tasks
 
 ### Adding a new MCP tool
+
 1. Define the tool in `cerebro-mcp/index.ts` using `(server as any).tool()`
 2. Add any new database queries to `database.ts` (parameterized)
 3. Build and test locally: `npm run build && npm run start`
 
 ### Adding a new database column
+
 1. Create a new numbered migration in `infra/database/` (e.g., `05-add-column.sql`)
 2. Use `IF NOT EXISTS` or `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` for idempotency
 3. Update `types.ts` if the column maps to a TypeScript interface
 4. Update relevant queries in `database.ts`
 
 ### Adding a new function
+
 1. Create a new directory under `functions/` (e.g., `cerebro-newfeature/index.ts`)
 2. Self-register routes using `app.http()` or `app.timer()`
 3. Import the module in `functions/app.ts`
 4. Build: `npm run build`
 
 ### Debugging locally
+
 1. Copy `.env.example` values into `functions/local.settings.json` under `"Values"`
 2. Run `npm run start` (requires Azure Functions Core Tools v4)
 3. Functions are available at `http://localhost:7071/`
 
 ### Deploying
+
 1. Try `func azure functionapp publish cerebro-func --node`
 2. If it fails with "Value cannot be null", use Kudu ZIP deploy:
+
    ```bash
    mkdir /tmp/deploy && cp -r dist node_modules host.json package.json /tmp/deploy/
    cd /tmp/deploy && zip -r deploy.zip .
    curl -X POST -u '<user>:<pass>' --data-binary @deploy.zip \
      https://cerebro-func.scm.azurewebsites.net/api/zipdeploy
    ```
+
 3. If ZIP deploy returns 409, stop/start the function app and retry after 30 seconds

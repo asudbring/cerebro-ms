@@ -105,6 +105,7 @@ curl "https://YOUR-FUNC.azurewebsites.net/api/weekly-digest?code=$FUNC_KEY"
 ```
 
 Both endpoints return JSON with:
+
 - `summary` — Markdown-formatted digest (for Teams)
 - `summaryHtml` — HTML-formatted digest (for email)
 - `thoughtCount` — Number of thoughts in the time window

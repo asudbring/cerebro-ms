@@ -26,6 +26,7 @@ This document contains everything an AI coding assistant (GitHub Copilot, Claude
 A personal knowledge base on Azure that captures thoughts from MCP clients and Microsoft Teams, embeds them with Azure OpenAI, stores in PostgreSQL with pgvector, and delivers AI-powered digest summaries.
 
 **Components:**
+
 - 4 Azure Function groups (MCP server, Teams bot, digest, OAuth)
 - PostgreSQL with pgvector extension for semantic search
 - Azure OpenAI for embeddings + chat completions
@@ -37,7 +38,7 @@ A personal knowledge base on Azure that captures thoughts from MCP clients and M
 
 ## Architecture
 
-```
+```text
 ┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │ MCP Clients │────▶│ Azure Functions  │────▶│ PostgreSQL      │
 │ Teams Bot   │────▶│ (4 groups)       │────▶│ (pgvector)      │
@@ -50,6 +51,7 @@ A personal knowledge base on Azure that captures thoughts from MCP clients and M
 ```
 
 **Function groups:**
+
 | Group | Route(s) | Purpose |
 |-------|----------|---------|
 | cerebro-mcp | `/cerebro-mcp` | MCP server — 7 tools, OAuth-protected |
@@ -103,6 +105,7 @@ If names conflict, append a random suffix (e.g., `cerebro-abc123-db`).
 ### Terraform outputs you'll need later
 
 After `terraform apply`, capture these values:
+
 ```bash
 terraform output -raw postgresql_fqdn       # DB hostname
 terraform output -raw function_app_name      # Function app name
@@ -127,7 +130,7 @@ Enable pgvector in Azure Portal **FIRST** — this cannot be done via SQL alone 
 
 Run the SQL migration files **in order**:
 
-```
+```text
 infra/database/01-enable-pgvector.sql
 infra/database/02-create-thoughts-table.sql
 infra/database/03-create-search-function.sql
@@ -135,6 +138,7 @@ infra/database/04-create-digest-channels.sql
 ```
 
 Using psql:
+
 ```bash
 export DATABASE_URL="postgresql://cerebroadmin:PASSWORD@DB-NAME.postgres.database.azure.com:5432/cerebro?sslmode=require"
 
@@ -200,7 +204,7 @@ WHERE routine_name = 'search_thoughts';
 
 **Tell the human:**
 
-1. Go to https://github.com/settings/developers → **New OAuth App**
+1. Go to <https://github.com/settings/developers> → **New OAuth App**
 2. Application name: `Cerebro` (or any name)
 3. Homepage URL: `https://FUNC-NAME.azurewebsites.net`
 4. Authorization callback URL: `https://FUNC-NAME.azurewebsites.net/oauth/callback`
@@ -231,6 +235,7 @@ npm run build
 ```
 
 Verify the build succeeded:
+
 ```bash
 ls dist/app.js  # Must exist — this is the entry point
 ```
@@ -447,7 +452,7 @@ curl -X POST https://FUNC-NAME.azurewebsites.net/cerebro-mcp \
 
 ## File Structure Reference
 
-```
+```text
 functions/
 ├── app.ts                      # Entry point — imports all modules
 ├── cerebro-mcp/index.ts        # MCP server (7 tools, OAuth validation)
