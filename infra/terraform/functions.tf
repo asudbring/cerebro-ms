@@ -53,7 +53,7 @@ resource "azurerm_windows_function_app" "cerebro" {
 
   site_config {
     application_stack {
-      node_version = "~18"
+      node_version = "~20"
     }
     cors {
       allowed_origins = ["*"]
@@ -63,7 +63,7 @@ resource "azurerm_windows_function_app" "cerebro" {
   app_settings = {
     # --- Runtime ---
     FUNCTIONS_WORKER_RUNTIME     = "node"
-    WEBSITE_NODE_DEFAULT_VERSION = "~18"
+    WEBSITE_NODE_DEFAULT_VERSION = "~20"
     WEBSITE_TIME_ZONE            = "Central Standard Time"
 
     # --- Application Insights ---
@@ -84,13 +84,26 @@ resource "azurerm_windows_function_app" "cerebro" {
     AZURE_STORAGE_CONNECTION_STRING = azurerm_storage_account.cerebro.primary_connection_string
 
     # --- Entra ID / Teams Bot ---
-    TEAMS_BOT_APP_ID    = azuread_application.teams_bot.client_id
-    TEAMS_BOT_TENANT_ID = var.entra_tenant_id
-    # TEAMS_BOT_APP_SECRET — set manually or via Key Vault after deploy
+    TEAMS_BOT_APP_ID     = azuread_application.teams_bot.client_id
+    TEAMS_BOT_APP_SECRET = azuread_application_password.teams_bot_secret.value
+    TEAMS_BOT_TENANT_ID  = var.entra_tenant_id
 
     # --- Azure Communication Services / Email ---
     ACS_CONNECTION_STRING    = azurerm_communication_service.cerebro.primary_connection_string
     ACS_EMAIL_SENDER         = "DoNotReply@${azurerm_email_communication_service_domain.cerebro.mail_from_sender_domain}"
+    DIGEST_EMAIL_RECIPIENT   = var.digest_email_recipient
+
+    # --- GitHub OAuth (MCP) ---
+    GITHUB_OAUTH_CLIENT_ID     = var.github_oauth_client_id
+    GITHUB_OAUTH_CLIENT_SECRET = var.github_oauth_client_secret
+    GITHUB_ALLOWED_USERS       = var.github_allowed_users
+  }
+
+  tags = {
+    project = "cerebro"
+  }
+}
+otReply@${azurerm_email_communication_service_domain.cerebro.mail_from_sender_domain}"
     DIGEST_EMAIL_RECIPIENT   = var.digest_email_recipient
   }
 

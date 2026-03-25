@@ -25,7 +25,7 @@ Cerebro is a personal knowledge base running on Azure. It captures thoughts from
 stores them in PostgreSQL with pgvector for semantic search, and surfaces them via an MCP
 server and AI-generated digest summaries.
 
-**Tech stack:** Azure Functions v4, TypeScript, Node 18+, PostgreSQL + pgvector,
+**Tech stack:** Azure Functions v4, TypeScript, Node 20+, PostgreSQL + pgvector,
 Azure OpenAI (text-embedding-3-small, gpt-4o-mini, gpt-4o), Azure Blob Storage,
 Azure Communication Services (email), GitHub OAuth, Bot Framework.
 
@@ -138,15 +138,19 @@ MCP Client (Copilot CLI, etc.) → cerebro-oauth → cerebro-mcp
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | `uuid` | PK |
-| `channel_type` | `text` | `'teams'` |
-| `channel_id` | `text` | Teams conversation reference (serialized JSON) |
-| `created_at` | `timestamptz` | |
+| `id` | `uuid` | PK, auto-generated |
+| `source` | `text` | `'teams'` (default) |
+| `teams_service_url` | `text` | Teams Bot Framework service URL |
+| `teams_conversation_id` | `text` | Teams conversation ID |
+| `teams_user_name` | `text` | Teams user display name |
+| `enabled` | `boolean` | Whether channel receives digests (default: true) |
+| `last_digest_at` | `timestamptz` | Timestamp of last digest sent |
+| `created_at` | `timestamptz` | Auto-set on insert |
 
 ### `match_thoughts` function
 
 ```sql
-match_thoughts(query_embedding vector(1536), match_threshold float, match_count int)
+match_thoughts(query_embedding vector(1536), match_threshold float, match_count int, filter_status text DEFAULT NULL)
 ```
 
 Returns thoughts with `similarity` score, ordered by similarity descending. Used by
@@ -202,8 +206,8 @@ The Teams endpoint validates JWT tokens issued by the Bot Connector service usin
 | `AZURE_OPENAI_CHAT_DEPLOYMENT` | Yes | Deployment name for gpt-4o-mini |
 | `AZURE_OPENAI_VISION_DEPLOYMENT` | Yes | Deployment name for gpt-4o |
 | `AZURE_STORAGE_CONNECTION_STRING` | Yes | Azure Blob Storage connection string |
-| `GITHUB_CLIENT_ID` | Yes | GitHub OAuth App client ID |
-| `GITHUB_CLIENT_SECRET` | Yes | GitHub OAuth App client secret |
+| `GITHUB_OAUTH_CLIENT_ID` | Yes | GitHub OAuth App client ID |
+| `GITHUB_OAUTH_CLIENT_SECRET` | Yes | GitHub OAuth App client secret |
 | `WEBSITE_TIME_ZONE` | Yes | Must be `"Central Standard Time"` for timer triggers |
 | `TEAMS_BOT_APP_ID` | Teams | Entra ID app registration client ID |
 | `TEAMS_BOT_APP_SECRET` | Teams | Entra ID app registration client secret |
@@ -363,12 +367,14 @@ The MCP server (`cerebro-mcp/index.ts`) exposes 7 tools via Streamable HTTP:
 | Tool | Parameters | Description |
 |------|-----------|-------------|
 | `search_thoughts` | `query: string` | Semantic search across all thoughts using vector similarity |
-| `browse_recent` | `limit?: number`, `type?: string`, `status?: string` | Browse thoughts with optional filters |
-| `cerebro_stats` | *(none)* | Get counts and statistics about the knowledge base |
+| `list_thoughts` | `limit?: number`, `type?: string`, `status?: string` | Browse thoughts with optional filters |
+| `thought_stats` | *(none)* | Get counts and statistics about the knowledge base |
 | `capture_thought` | `content: string` | Capture a new thought (embeds + extracts metadata) |
 | `complete_task` | `description: string` | Mark the closest matching open task as done |
 | `reopen_task` | `description: string` | Reopen the closest matching completed task |
 | `delete_task` | `description: string` | Soft-delete the closest matching thought |
+
+> **Note:** Some older documentation may reference `browse_recent`, `cerebro_stats`, or `delete_thought` — these were renamed to `list_thoughts`, `thought_stats`, and `delete_task`.
 
 ---
 

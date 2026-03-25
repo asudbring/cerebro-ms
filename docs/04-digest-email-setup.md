@@ -98,10 +98,10 @@ az functionapp config appsettings set -n YOUR-FUNC -g cerebro-rg --settings \
 FUNC_KEY=$(az functionapp keys list -n YOUR-FUNC -g cerebro-rg --query "functionKeys.default" -o tsv)
 
 # Trigger daily digest
-curl "https://YOUR-FUNC.azurewebsites.net/api/daily-digest?code=$FUNC_KEY"
+curl "https://YOUR-FUNC.azurewebsites.net/daily-digest?code=$FUNC_KEY"
 
 # Trigger weekly digest
-curl "https://YOUR-FUNC.azurewebsites.net/api/weekly-digest?code=$FUNC_KEY"
+curl "https://YOUR-FUNC.azurewebsites.net/weekly-digest?code=$FUNC_KEY"
 ```
 
 Both endpoints return JSON with:
@@ -129,7 +129,7 @@ Timezone is set via `WEBSITE_TIME_ZONE=Central Standard Time` on the function ap
 | # | Test | Expected |
 |---|------|----------|
 | 1 | Capture a few thoughts first | Thoughts in database |
-| 2 | `curl .../api/daily-digest?code=KEY` | 200, JSON with summary |
+| 2 | `curl .../daily-digest?code=KEY` | 200, JSON with summary |
 | 3 | Check email inbox | Digest email received |
 | 4 | Check Teams (if bot active) | Digest posted to conversation |
 

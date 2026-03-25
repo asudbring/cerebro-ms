@@ -238,8 +238,8 @@ See [`.env.example`](.env.example) for the full list. Key groups:
 | Database | `DATABASE_URL` |
 | Blob Storage | `AZURE_STORAGE_CONNECTION_STRING` |
 | Teams Bot | `TEAMS_BOT_APP_ID`, `TEAMS_BOT_APP_SECRET`, `TEAMS_BOT_TENANT_ID` |
-| GitHub OAuth | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` |
-| Email (ACS) | `ACS_CONNECTION_STRING`, `ACS_SENDER_ADDRESS` |
+| GitHub OAuth | `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET` |
+| Email (ACS) | `ACS_CONNECTION_STRING`, `ACS_EMAIL_SENDER` |
 | Graph API | `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET` |
 
 > **Note:** Azure OpenAI uses **deployment names**, not model names.
@@ -261,7 +261,7 @@ See [`.env.example`](.env.example) for the full list. Key groups:
 | Guide | Description |
 |-------|-------------|
 | [Setup Guide](docs/setup.md) | Full deployment walkthrough |
-| [APIM Setup](docs/apim-setup.md) | API Management configuration |
+| [MCP OAuth Setup](docs/02-mcp-oauth-setup.md) | MCP server & GitHub OAuth configuration |
 | [Teams Manifest](teams/README.md) | Teams app packaging & sideloading |
 | [Database Migrations](infra/database/README.md) | SQL migration details |
 

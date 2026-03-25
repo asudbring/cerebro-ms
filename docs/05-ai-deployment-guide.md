@@ -55,8 +55,8 @@ A personal knowledge base on Azure that captures thoughts from MCP clients and M
 | Group | Route(s) | Purpose |
 |-------|----------|---------|
 | cerebro-mcp | `/cerebro-mcp` | MCP server — 7 tools, OAuth-protected |
-| cerebro-teams | `/api/messages` | Teams bot — capture, tasks, files, digest registration |
-| cerebro-digest | `/api/daily-digest`, `/api/weekly-digest` | Timer + HTTP triggers for digest generation |
+| cerebro-teams | `/cerebro-teams` | Teams bot — capture, tasks, files, digest registration |
+| cerebro-digest | `/daily-digest`, `/weekly-digest` | Timer + HTTP triggers for digest generation |
 | cerebro-oauth | `/oauth/*`, `/.well-known/*` | GitHub OAuth flow (6 endpoints) |
 
 ---
@@ -195,7 +195,7 @@ WHERE table_name = 'thoughts' ORDER BY ordinal_position;
 
 -- Confirm search function exists
 SELECT routine_name FROM information_schema.routines
-WHERE routine_name = 'search_thoughts';
+WHERE routine_name = 'match_thoughts';
 ```
 
 ---
@@ -216,8 +216,8 @@ WHERE routine_name = 'search_thoughts';
 
 ```bash
 az functionapp config appsettings set -n FUNC-NAME -g cerebro-rg --settings \
-  GITHUB_CLIENT_ID="Ov23li..." \
-  GITHUB_CLIENT_SECRET="..."
+  GITHUB_OAUTH_CLIENT_ID="Ov23li..." \
+  GITHUB_OAUTH_CLIENT_SECRET="..."
 ```
 
 > **Why GitHub OAuth?** The MCP server uses GitHub OAuth for authentication. MCP clients (VS Code Copilot, Claude Desktop, etc.) authenticate via this flow. The OAuth endpoints in `cerebro-oauth/index.ts` handle the full authorization code grant flow.
@@ -296,8 +296,8 @@ az functionapp config appsettings set -n FUNC-NAME -g cerebro-rg --settings \
   AZURE_OPENAI_CHAT_DEPLOYMENT="gpt-4o-mini" \
   AZURE_OPENAI_VISION_DEPLOYMENT="gpt-4o" \
   AZURE_STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=https;..." \
-  GITHUB_CLIENT_ID="Ov23li..." \
-  GITHUB_CLIENT_SECRET="..." \
+  GITHUB_OAUTH_CLIENT_ID="Ov23li..." \
+  GITHUB_OAUTH_CLIENT_SECRET="..." \
   WEBSITE_TIME_ZONE="Central Standard Time"
 ```
 
@@ -332,8 +332,8 @@ az functionapp config appsettings set -n FUNC-NAME -g cerebro-rg --settings \
 | `AZURE_OPENAI_CHAT_DEPLOYMENT` | ✅ | Deployment name for gpt-4o-mini |
 | `AZURE_OPENAI_VISION_DEPLOYMENT` | ✅ | Deployment name for gpt-4o (image analysis) |
 | `AZURE_STORAGE_CONNECTION_STRING` | ✅ | Blob storage for file attachments |
-| `GITHUB_CLIENT_ID` | ✅ | GitHub OAuth App client ID |
-| `GITHUB_CLIENT_SECRET` | ✅ | GitHub OAuth App client secret |
+| `GITHUB_OAUTH_CLIENT_ID` | ✅ | GitHub OAuth App client ID |
+| `GITHUB_OAUTH_CLIENT_SECRET` | ✅ | GitHub OAuth App client secret |
 | `WEBSITE_TIME_ZONE` | ✅ | `Central Standard Time` for timer triggers |
 | `TEAMS_BOT_APP_ID` | ❌ | Entra ID app registration for Teams bot |
 | `TEAMS_BOT_APP_SECRET` | ❌ | Bot app registration secret |
@@ -399,11 +399,11 @@ curl -X POST https://FUNC-NAME.azurewebsites.net/cerebro-mcp \
 |------|-------------|
 | `capture_thought` | Save a new thought |
 | `search_thoughts` | Semantic search across all thoughts |
-| `browse_recent` | List recent thoughts with optional filters |
-| `cerebro_stats` | Get statistics (totals, types, topics) |
+| `list_thoughts` | List recent thoughts with optional filters |
+| `thought_stats` | Get statistics (totals, types, topics) |
 | `complete_task` | Mark a task as done (semantic match) |
 | `reopen_task` | Reopen a completed task |
-| `delete_thought` | Soft-delete a thought |
+| `delete_task` | Soft-delete a thought |
 
 ---
 
@@ -438,7 +438,7 @@ curl -X POST https://FUNC-NAME.azurewebsites.net/cerebro-mcp \
 | Detail | Value |
 |--------|-------|
 | Vector dimension | 1536 (`text-embedding-3-small`) |
-| Runtime | Azure Functions v4 (Node 18+) |
+| Runtime | Azure Functions v4 (Node 20+) |
 | Entry point | `functions/app.ts` → `dist/app.js` |
 | Self-registration | Functions use `app.http()` / `app.timer()` |
 | Route prefix | `""` (empty — critical for OAuth routes) |

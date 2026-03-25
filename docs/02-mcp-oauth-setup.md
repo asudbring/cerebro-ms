@@ -128,8 +128,8 @@ az functionapp config appsettings set \
   -n YOUR-FUNC \
   -g cerebro-rg \
   --settings \
-    GITHUB_CLIENT_ID="Ov23li..." \
-    GITHUB_CLIENT_SECRET="your_secret_here"
+    GITHUB_OAUTH_CLIENT_ID="Ov23li..." \
+    GITHUB_OAUTH_CLIENT_SECRET="your_secret_here"
 ```
 
 > 💡 Replace `YOUR-FUNC` with your function app name and `cerebro-rg` with your resource group.
@@ -139,8 +139,8 @@ For **local development**, add these to `functions/local.settings.json`:
 ```json
 {
   "Values": {
-    "GITHUB_CLIENT_ID": "Ov23li...",
-    "GITHUB_CLIENT_SECRET": "your_secret_here"
+    "GITHUB_OAUTH_CLIENT_ID": "Ov23li...",
+    "GITHUB_OAUTH_CLIENT_SECRET": "your_secret_here"
   }
 }
 ```
