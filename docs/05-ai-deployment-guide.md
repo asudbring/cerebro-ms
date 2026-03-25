@@ -217,10 +217,13 @@ WHERE routine_name = 'match_thoughts';
 ```bash
 az functionapp config appsettings set -n FUNC-NAME -g cerebro-rg --settings \
   GITHUB_OAUTH_CLIENT_ID="Ov23li..." \
-  GITHUB_OAUTH_CLIENT_SECRET="..."
+  GITHUB_OAUTH_CLIENT_SECRET="..." \
+  GITHUB_ALLOWED_USERS="your-github-username"
 ```
 
-> **Why GitHub OAuth?** The MCP server uses GitHub OAuth for authentication. MCP clients (VS Code Copilot, Claude Desktop, etc.) authenticate via this flow. The OAuth endpoints in `cerebro-oauth/index.ts` handle the full authorization code grant flow.
+> **Why GitHub OAuth?** The MCP server uses GitHub OAuth for authentication. MCP clients (VS Code Copilot, Claude Desktop, etc.) authenticate via this flow. The OAuth endpoints in `cerebro-oauth/index.ts` handle the full authorization code grant flow with PKCE verification and signed state parameters.
+>
+> **Access control:** Set `GITHUB_ALLOWED_USERS` to restrict access to specific GitHub accounts. If empty, all authenticated GitHub users have access.
 
 ---
 
@@ -298,6 +301,7 @@ az functionapp config appsettings set -n FUNC-NAME -g cerebro-rg --settings \
   AZURE_STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=https;..." \
   GITHUB_OAUTH_CLIENT_ID="Ov23li..." \
   GITHUB_OAUTH_CLIENT_SECRET="..." \
+  GITHUB_ALLOWED_USERS="your-github-username" \
   WEBSITE_TIME_ZONE="Central Standard Time"
 ```
 
@@ -334,6 +338,8 @@ az functionapp config appsettings set -n FUNC-NAME -g cerebro-rg --settings \
 | `AZURE_STORAGE_CONNECTION_STRING` | ✅ | Blob storage for file attachments |
 | `GITHUB_OAUTH_CLIENT_ID` | ✅ | GitHub OAuth App client ID |
 | `GITHUB_OAUTH_CLIENT_SECRET` | ✅ | GitHub OAuth App client secret |
+| `GITHUB_ALLOWED_USERS` | ❌ | Comma-separated GitHub usernames allowed to access MCP (empty = all) |
+| `OAUTH_STATE_SECRET` | ❌ | HMAC key for OAuth state signing; falls back to client secret |
 | `WEBSITE_TIME_ZONE` | ✅ | `Central Standard Time` for timer triggers |
 | `TEAMS_BOT_APP_ID` | ❌ | Entra ID app registration for Teams bot |
 | `TEAMS_BOT_APP_SECRET` | ❌ | Bot app registration secret |

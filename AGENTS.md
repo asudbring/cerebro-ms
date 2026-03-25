@@ -208,6 +208,8 @@ The Teams endpoint validates JWT tokens issued by the Bot Connector service usin
 | `AZURE_STORAGE_CONNECTION_STRING` | Yes | Azure Blob Storage connection string |
 | `GITHUB_OAUTH_CLIENT_ID` | Yes | GitHub OAuth App client ID |
 | `GITHUB_OAUTH_CLIENT_SECRET` | Yes | GitHub OAuth App client secret |
+| `GITHUB_ALLOWED_USERS` | No | Comma-separated GitHub usernames allowed to access MCP (empty = allow all) |
+| `OAUTH_STATE_SECRET` | No | HMAC key for signing OAuth state; falls back to `GITHUB_OAUTH_CLIENT_SECRET` |
 | `WEBSITE_TIME_ZONE` | Yes | Must be `"Central Standard Time"` for timer triggers |
 | `TEAMS_BOT_APP_ID` | Teams | Entra ID app registration client ID |
 | `TEAMS_BOT_APP_SECRET` | Teams | Entra ID app registration client secret |

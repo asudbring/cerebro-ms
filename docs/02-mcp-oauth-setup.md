@@ -129,10 +129,20 @@ az functionapp config appsettings set \
   -g cerebro-rg \
   --settings \
     GITHUB_OAUTH_CLIENT_ID="Ov23li..." \
-    GITHUB_OAUTH_CLIENT_SECRET="your_secret_here"
+    GITHUB_OAUTH_CLIENT_SECRET="your_secret_here" \
+    GITHUB_ALLOWED_USERS="your-github-username"
 ```
 
 > 💡 Replace `YOUR-FUNC` with your function app name and `cerebro-rg` with your resource group.
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GITHUB_OAUTH_CLIENT_ID` | Yes | GitHub OAuth App Client ID |
+| `GITHUB_OAUTH_CLIENT_SECRET` | Yes | GitHub OAuth App Client Secret |
+| `GITHUB_ALLOWED_USERS` | No | Comma-separated GitHub usernames allowed to access the MCP server. If empty, all authenticated GitHub users have access. |
+| `OAUTH_STATE_SECRET` | No | HMAC key for signing OAuth state parameters. Falls back to `GITHUB_OAUTH_CLIENT_SECRET` if not set. |
 
 For **local development**, add these to `functions/local.settings.json`:
 
@@ -140,7 +150,8 @@ For **local development**, add these to `functions/local.settings.json`:
 {
   "Values": {
     "GITHUB_OAUTH_CLIENT_ID": "Ov23li...",
-    "GITHUB_OAUTH_CLIENT_SECRET": "your_secret_here"
+    "GITHUB_OAUTH_CLIENT_SECRET": "your_secret_here",
+    "GITHUB_ALLOWED_USERS": "your-github-username"
   }
 }
 ```
@@ -264,6 +275,29 @@ Any MCP client that supports **OAuth 2.1 with PKCE** and **HTTP transport** will
 - **Access tokens** are GitHub OAuth tokens — they don't expire on a fixed schedule
 - **Validation** happens on every request by calling `https://api.github.com/user`
 - **Revocation** — revoke the token on GitHub (Settings → Applications → Authorized OAuth Apps)
+
+---
+
+## Security Features
+
+The OAuth implementation includes several security hardening measures:
+
+### PKCE (Proof Key for Code Exchange)
+
+All authorization requests support S256 PKCE. The token endpoint verifies the `code_verifier` against the stored `code_challenge` before issuing tokens. This prevents authorization code interception attacks.
+
+### Signed State Parameters
+
+The OAuth `state` parameter is signed with HMAC-SHA256 to prevent tampering. The signing key is derived from `OAUTH_STATE_SECRET` (or falls back to `GITHUB_OAUTH_CLIENT_SECRET`). Invalid or tampered state values are rejected with a 400 error.
+
+### User Allowlist
+
+Set `GITHUB_ALLOWED_USERS` to restrict MCP access to specific GitHub accounts. When set, only listed usernames can access the MCP server — all others receive a 403 error. When empty or unset, all authenticated GitHub users have access.
+
+```bash
+# Allow multiple users (comma-separated)
+GITHUB_ALLOWED_USERS="user1,user2,user3"
+```
 
 ---
 
