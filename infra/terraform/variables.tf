@@ -1,6 +1,11 @@
 # -----------------------------------------------------------------------------
 # General
 # -----------------------------------------------------------------------------
+variable "subscription_id" {
+  description = "Azure subscription ID for all resources"
+  type        = string
+}
+
 variable "location" {
   description = "Azure region for all resources"
   type        = string
@@ -101,6 +106,28 @@ variable "entra_tenant_id" {
 # -----------------------------------------------------------------------------
 variable "digest_email_recipient" {
   description = "Email address to receive digest summaries"
+  type        = string
+  default     = ""
+}
+
+# -----------------------------------------------------------------------------
+# GitHub OAuth (MCP)
+# -----------------------------------------------------------------------------
+variable "github_oauth_client_id" {
+  description = "GitHub OAuth App Client ID for MCP authentication"
+  type        = string
+  default     = ""
+}
+
+variable "github_oauth_client_secret" {
+  description = "GitHub OAuth App Client Secret for MCP authentication"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "github_allowed_users" {
+  description = "Comma-separated list of GitHub usernames allowed to access the MCP server (empty = allow all authenticated users)"
   type        = string
   default     = ""
 }

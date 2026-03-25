@@ -2,6 +2,7 @@ import { app, HttpRequest, HttpResponseInit, InvocationContext, Timer } from '@a
 import { getThoughtsSince, getCompletedThoughtsSince, getDigestChannels } from '../lib/database.js';
 import { sendDigestEmail, isEmailConfigured } from '../lib/email.js';
 import { Thought, DigestChannel } from '../lib/types.js';
+import { getBotToken } from '../lib/bot-token.js';
 
 // --- Timer triggers ---
 
@@ -181,42 +182,6 @@ ${completedList || '(none)'}`;
 
 // --- Bot Framework proactive messaging ---
 
-let botToken: { token: string; expiresAt: number } | null = null;
-
-async function getBotToken(): Promise<string> {
-  if (botToken && Date.now() < botToken.expiresAt - 60000) {
-    return botToken.token;
-  }
-
-  const botAppId = process.env.TEAMS_BOT_APP_ID;
-  const botAppSecret = process.env.TEAMS_BOT_APP_SECRET;
-
-  if (!botAppId || !botAppSecret) {
-    throw new Error('Bot credentials not configured for digest delivery');
-  }
-
-  const response = await fetch('https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: botAppId,
-      client_secret: botAppSecret,
-      scope: 'https://api.botframework.com/.default',
-    }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    console.error('Bot token request failed:', response.status, text);
-    throw new Error(`Failed to get bot token: ${response.status}`);
-  }
-
-  const data = await response.json() as { access_token: string; expires_in: number };
-  botToken = { token: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 };
-  return botToken.token;
-}
-
 async function sendTeamsProactiveMessage(channel: DigestChannel, message: string): Promise<void> {
   const token = await getBotToken();
   const serviceUrl = channel.teams_service_url;
@@ -226,7 +191,8 @@ async function sendTeamsProactiveMessage(channel: DigestChannel, message: string
     throw new Error('Missing serviceUrl or conversationId for digest delivery');
   }
 
-  const url = `${serviceUrl}v3/conversations/${encodeURIComponent(conversationId)}/activities`;
+  const baseUrl = serviceUrl.endsWith('/') ? serviceUrl : serviceUrl + '/';
+  const url = `${baseUrl}v3/conversations/${encodeURIComponent(conversationId)}/activities`;
 
   const response = await fetch(url, {
     method: 'POST',
@@ -249,6 +215,6 @@ async function sendTeamsProactiveMessage(channel: DigestChannel, message: string
 function markdownToHtml(markdown: string): string {
   return markdown
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/_(.*?)_/g, '<em>$1</em>')
+    .replace(/(?<!\w)_(.+?)_(?!\w)/g, '<em>$1</em>')
     .replace(/\n/g, '<br>\n');
 }

@@ -30,7 +30,7 @@
       "isNotificationOnly": false,
       "commandLists": [
         {
-          "scopes": ["personal"],
+          "scopes": ["personal", "team", "groupChat"],
           "commands": [
             {
               "title": "done",

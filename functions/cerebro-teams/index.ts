@@ -3,14 +3,12 @@ import { validateBotToken, isAllowedSender } from '../lib/auth';
 import { insertThought, findClosestThought, updateThoughtStatus, upsertDigestChannel } from '../lib/database';
 import { getEmbedding, extractMetadata, analyzeImage, analyzeDocument } from '../lib/azure-ai';
 import { uploadFile, generateSasUrl } from '../lib/blob-storage';
+import { getBotToken } from '../lib/bot-token';
 
 
 // Bot reply prefixes — loop guard prevents re-processing our own replies
 const BOT_REPLY_PREFIXES = ['**Captured**', '✅ **Marked done', '🔄 **Reopened', '🗑️ **Deleted'];
 const STALE_MESSAGE_MS = 5 * 60 * 1000; // 5 minutes
-
-// Cached Bot Framework token for sending replies
-let cachedBotToken: { token: string; expiresAt: number } | null = null;
 
 app.http('cerebro-teams', {
   methods: ['POST'],
@@ -42,7 +40,7 @@ async function handleTeamsMessage(request: HttpRequest, context: InvocationConte
     // 4. Stale message guard
     if (activity.timestamp) {
       const messageAge = Date.now() - new Date(activity.timestamp).getTime();
-      if (messageAge > STALE_MESSAGE_MS) {
+      if (Math.abs(messageAge) > STALE_MESSAGE_MS) {
         return { status: 200, body: '' };
       }
     }
@@ -115,10 +113,9 @@ async function handleThoughtCapture(text: string, activity: any): Promise<HttpRe
   // Embedding + metadata in parallel
   const [embedding, metadata] = await Promise.all([
     getEmbedding(content),
-    extractMetadata(content),
+    extractMetadata(content, 'teams'),
   ]);
 
-  metadata.source = 'teams';
   if (fileUrl) {
     metadata.has_file = true;
     metadata.file_name = activity.attachments?.[0]?.name || '';
@@ -142,6 +139,11 @@ async function handleThoughtCapture(text: string, activity: any): Promise<HttpRe
 // --- Task Management ---
 
 async function handleTaskComplete(description: string, activity: any): Promise<HttpResponseInit> {
+  if (!description) {
+    await sendTeamsReply(activity, "Please provide a description after 'done:'");
+    return { status: 200, body: '' };
+  }
+
   const embedding = await getEmbedding(description);
   const match = await findClosestThought(embedding, 'open');
 
@@ -150,7 +152,11 @@ async function handleTaskComplete(description: string, activity: any): Promise<H
     return { status: 200, body: '' };
   }
 
-  await updateThoughtStatus(match.id, 'done');
+  const updated = await updateThoughtStatus(match.id, 'done');
+  if (!updated) {
+    await sendTeamsReply(activity, '❌ Failed to update task status.');
+    return { status: 200, body: '' };
+  }
   const title = match.metadata?.title || 'Untitled';
   const similarity = (match.similarity * 100).toFixed(1);
   await sendTeamsReply(activity, `✅ **Marked done:** ${title} (${similarity}% match)`);
@@ -158,6 +164,11 @@ async function handleTaskComplete(description: string, activity: any): Promise<H
 }
 
 async function handleTaskReopen(description: string, activity: any): Promise<HttpResponseInit> {
+  if (!description) {
+    await sendTeamsReply(activity, "Please provide a description after 'reopen:'");
+    return { status: 200, body: '' };
+  }
+
   const embedding = await getEmbedding(description);
   const match = await findClosestThought(embedding, 'done');
 
@@ -166,7 +177,11 @@ async function handleTaskReopen(description: string, activity: any): Promise<Htt
     return { status: 200, body: '' };
   }
 
-  await updateThoughtStatus(match.id, 'open');
+  const updated = await updateThoughtStatus(match.id, 'open');
+  if (!updated) {
+    await sendTeamsReply(activity, '❌ Failed to update task status.');
+    return { status: 200, body: '' };
+  }
   const title = match.metadata?.title || 'Untitled';
   const similarity = (match.similarity * 100).toFixed(1);
   await sendTeamsReply(activity, `🔄 **Reopened:** ${title} (${similarity}% match)`);
@@ -174,6 +189,11 @@ async function handleTaskReopen(description: string, activity: any): Promise<Htt
 }
 
 async function handleTaskDelete(description: string, activity: any): Promise<HttpResponseInit> {
+  if (!description) {
+    await sendTeamsReply(activity, "Please provide a description after 'delete:'");
+    return { status: 200, body: '' };
+  }
+
   const embedding = await getEmbedding(description);
   let match = await findClosestThought(embedding, 'open');
   if (!match) match = await findClosestThought(embedding, 'done');
@@ -183,7 +203,11 @@ async function handleTaskDelete(description: string, activity: any): Promise<Htt
     return { status: 200, body: '' };
   }
 
-  await updateThoughtStatus(match.id, 'deleted');
+  const updated = await updateThoughtStatus(match.id, 'deleted');
+  if (!updated) {
+    await sendTeamsReply(activity, '❌ Failed to update task status.');
+    return { status: 200, body: '' };
+  }
   const title = match.metadata?.title || 'Untitled';
   const similarity = (match.similarity * 100).toFixed(1);
   await sendTeamsReply(activity, `🗑️ **Deleted:** ${title} (${similarity}% match)`);
@@ -243,40 +267,6 @@ async function downloadTeamsFile(contentUrl: string): Promise<Buffer> {
 
 // --- Bot Framework Reply ---
 
-async function getBotToken(): Promise<string> {
-  if (cachedBotToken && Date.now() < cachedBotToken.expiresAt - 60000) {
-    return cachedBotToken.token;
-  }
-
-  const botAppId = process.env.TEAMS_BOT_APP_ID;
-  const botAppSecret = process.env.TEAMS_BOT_APP_SECRET;
-
-  if (!botAppId || !botAppSecret) {
-    throw new Error('TEAMS_BOT_APP_ID or TEAMS_BOT_APP_SECRET not configured');
-  }
-
-  const res = await fetch('https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: botAppId,
-      client_secret: botAppSecret,
-      scope: 'https://api.botframework.com/.default',
-    }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    console.error('Bot token request failed:', res.status, text);
-    throw new Error(`Failed to get Bot Framework token: ${res.status}`);
-  }
-
-  const data = await res.json() as any;
-  cachedBotToken = { token: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 };
-  return cachedBotToken.token;
-}
-
 async function sendTeamsReply(activity: any, text: string): Promise<void> {
   const serviceUrl = activity.serviceUrl;
   const conversationId = activity.conversation?.id;
@@ -290,7 +280,8 @@ async function sendTeamsReply(activity: any, text: string): Promise<void> {
   try {
     const token = await getBotToken();
 
-    const replyUrl = `${serviceUrl}v3/conversations/${encodeURIComponent(conversationId)}/activities/${encodeURIComponent(activityId)}`;
+    const baseUrl = serviceUrl.endsWith('/') ? serviceUrl : serviceUrl + '/';
+    const replyUrl = `${baseUrl}v3/conversations/${encodeURIComponent(conversationId)}/activities/${encodeURIComponent(activityId)}`;
 
     const response = await fetch(replyUrl, {
       method: 'POST',

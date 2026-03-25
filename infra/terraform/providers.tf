@@ -18,13 +18,13 @@ terraform {
 }
 
 provider "azurerm" {
-  subscription_id = "your-azure-subscription-id"
+  subscription_id = var.subscription_id
   features {}
 }
 
 # Entra ID app registrations live in the user's tenant
 provider "azuread" {
-  tenant_id = "your-entra-tenant-id"
+  tenant_id = var.entra_tenant_id
 }
 
 provider "azapi" {}

@@ -1,4 +1,5 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
+import { createHash, createHmac } from 'crypto';
 import {
   getOAuthConfig,
   getBaseUrl,
@@ -7,6 +8,28 @@ import {
   getAuthorizationServerMetadata,
   isOAuthConfigured,
 } from '../lib/github-oauth.js';
+
+// --- HMAC-signed state helpers ---
+
+function getSigningKey(): string {
+  return process.env.OAUTH_STATE_SECRET || process.env.GITHUB_OAUTH_CLIENT_SECRET || '';
+}
+
+function createSignedPayload(payload: object): string {
+  const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = createHmac('sha256', getSigningKey()).update(payloadB64).digest('base64url');
+  return `${payloadB64}.${signature}`;
+}
+
+function verifySignedPayload(signed: string): any {
+  const dotIndex = signed.indexOf('.');
+  if (dotIndex === -1) throw new Error('Invalid signed payload');
+  const payloadB64 = signed.substring(0, dotIndex);
+  const signature = signed.substring(dotIndex + 1);
+  const expectedSignature = createHmac('sha256', getSigningKey()).update(payloadB64).digest('base64url');
+  if (signature !== expectedSignature) throw new Error('Invalid signature');
+  return JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
+}
 
 // --- Protected Resource Metadata (RFC 9728) ---
 // MCP clients discover auth requirements via this endpoint
@@ -82,15 +105,14 @@ app.http('oauth-authorize', {
       const codeChallengeMethod = url.searchParams.get('code_challenge_method') || '';
       const scope = url.searchParams.get('scope') || '';
 
-      // Store PKCE and redirect_uri in state (base64url-encoded JSON)
+      // Store PKCE and redirect_uri in HMAC-signed state
       // The state parameter is passed through GitHub and back to us
-      const statePayload = JSON.stringify({
+      const encodedState = createSignedPayload({
         original_state: state,
         redirect_uri: redirectUri,
         code_challenge: codeChallenge,
         code_challenge_method: codeChallengeMethod,
       });
-      const encodedState = Buffer.from(statePayload).toString('base64url');
 
       // Build GitHub authorization URL
       const githubUrl = new URL('https://github.com/login/oauth/authorize');
@@ -132,10 +154,10 @@ app.http('oauth-callback', {
         return { status: 400, body: 'Missing code or state parameter' };
       }
 
-      // Decode the state to get the original redirect_uri
+      // Verify signature and decode the state to get the original redirect_uri
       let statePayload: any;
       try {
-        statePayload = JSON.parse(Buffer.from(stateParam, 'base64url').toString());
+        statePayload = verifySignedPayload(stateParam);
       } catch {
         return { status: 400, body: 'Invalid state parameter' };
       }
@@ -145,10 +167,17 @@ app.http('oauth-callback', {
         return { status: 400, body: 'No redirect_uri in state' };
       }
 
-      // Redirect back to the MCP client with the authorization code
+      // Wrap GitHub code with PKCE challenge for the token endpoint
+      const wrappedCode = createSignedPayload({
+        github_code: code,
+        code_challenge: statePayload.code_challenge,
+        code_challenge_method: statePayload.code_challenge_method,
+      });
+
+      // Redirect back to the MCP client with the wrapped authorization code
       // The client will then exchange it at our /oauth/token endpoint
       const callbackUrl = new URL(redirectUri);
-      callbackUrl.searchParams.set('code', code);
+      callbackUrl.searchParams.set('code', wrappedCode);
       if (statePayload.original_state) {
         callbackUrl.searchParams.set('state', statePayload.original_state);
       }
@@ -196,8 +225,51 @@ app.http('oauth-token', {
         };
       }
 
+      // Decode the wrapped authorization code (contains GitHub code + PKCE challenge)
+      const codeVerifier = params.get('code_verifier');
+      let githubCode: string;
+      let codeChallenge: string | undefined;
+      let codeChallengeMethod: string | undefined;
+
+      try {
+        const decoded = verifySignedPayload(code);
+        githubCode = decoded.github_code;
+        codeChallenge = decoded.code_challenge || undefined;
+        codeChallengeMethod = decoded.code_challenge_method || undefined;
+      } catch {
+        return {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'invalid_grant', error_description: 'Invalid authorization code' }),
+        };
+      }
+
+      // PKCE verification
+      if (codeChallenge) {
+        if (!codeVerifier) {
+          return {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'invalid_grant', error_description: 'PKCE verification failed' }),
+          };
+        }
+        let computedChallenge: string;
+        if (codeChallengeMethod === 'S256') {
+          computedChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
+        } else {
+          computedChallenge = codeVerifier;
+        }
+        if (computedChallenge !== codeChallenge) {
+          return {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'invalid_grant', error_description: 'PKCE verification failed' }),
+          };
+        }
+      }
+
       // Exchange the code with GitHub
-      const tokenResponse = await exchangeCodeForToken(code);
+      const tokenResponse = await exchangeCodeForToken(githubCode);
 
       // Return the token to the MCP client
       return {

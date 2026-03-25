@@ -11,6 +11,8 @@ function getPool(): pg.Pool {
       connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: true },
       max: 5,
+      connectionTimeoutMillis: 5000,
+      idleTimeoutMillis: 30000,
     });
   }
   return pool;
@@ -88,9 +90,7 @@ export async function browseThoughts(options?: {
   }
 
   const limit = options?.limit ?? 20;
-  conditions.push(`1=1`); // ensures WHERE clause is never empty (status always present, but defensive)
-
-  const whereClause = conditions.join(' AND ');
+  const whereClause= conditions.join(' AND ');
   const result = await getPool().query(
     `SELECT id, content, metadata, status, file_url, file_type, source_message_id, created_at, updated_at
      FROM thoughts
@@ -157,13 +157,13 @@ export async function getStats(): Promise<{
 export async function updateThoughtStatus(
   id: string,
   status: 'open' | 'done' | 'deleted'
-): Promise<Thought> {
+): Promise<Thought | null> {
   const result = await getPool().query(
     `UPDATE thoughts SET status = $1 WHERE id = $2
      RETURNING id, content, metadata, status, file_url, file_type, source_message_id, created_at, updated_at`,
     [status, id]
   );
-  return result.rows[0] as Thought;
+  return (result.rows[0] as Thought) || null;
 }
 
 export async function findClosestThought(

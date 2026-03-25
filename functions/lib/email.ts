@@ -1,5 +1,18 @@
 import { EmailClient } from '@azure/communication-email';
 
+let emailClient: EmailClient | null = null;
+
+function getEmailClient(): EmailClient {
+  const connectionString = process.env.ACS_CONNECTION_STRING;
+  if (!connectionString) {
+    throw new Error('ACS_CONNECTION_STRING is not configured');
+  }
+  if (!emailClient) {
+    emailClient = new EmailClient(connectionString);
+  }
+  return emailClient;
+}
+
 export function isEmailConfigured(): boolean {
   return !!(
     process.env.ACS_CONNECTION_STRING &&
@@ -28,7 +41,7 @@ export async function sendDigestEmail(
   }
 
   try {
-    const client = new EmailClient(connectionString);
+    const client = getEmailClient();
     const message = {
       senderAddress,
       content: { subject, html: htmlContent },

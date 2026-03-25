@@ -16,6 +16,10 @@ function buildUrl(endpoint: string, deployment: string): string {
 
 export async function getEmbedding(text: string): Promise<number[]> {
   const { endpoint, apiKey, embeddingDeployment } = getConfig();
+
+  if (!endpoint) throw new Error('AZURE_OPENAI_ENDPOINT is not configured');
+  if (!apiKey) throw new Error('AZURE_OPENAI_API_KEY is not configured');
+
   const url = `${endpoint}/openai/deployments/${embeddingDeployment}/embeddings?api-version=${API_VERSION}`;
 
   const response = await fetch(url, {
@@ -31,11 +35,20 @@ export async function getEmbedding(text: string): Promise<number[]> {
   }
 
   const data = await response.json();
+
+  if (!data?.data?.[0]?.embedding) {
+    throw new Error(`Unexpected embedding API response: ${JSON.stringify(data)}`);
+  }
+
   return data.data[0].embedding;
 }
 
-export async function extractMetadata(content: string): Promise<ThoughtMetadata> {
+export async function extractMetadata(content: string, source: 'mcp' | 'teams' = 'mcp'): Promise<ThoughtMetadata> {
   const { endpoint, apiKey, chatDeployment } = getConfig();
+
+  if (!endpoint) throw new Error('AZURE_OPENAI_ENDPOINT is not configured');
+  if (!apiKey) throw new Error('AZURE_OPENAI_API_KEY is not configured');
+
   const url = buildUrl(endpoint, chatDeployment);
 
   const response = await fetch(url, {
@@ -53,10 +66,16 @@ export async function extractMetadata(content: string): Promise<ThoughtMetadata>
   if (!response.ok) {
     const body = await response.text();
     console.error('Metadata extraction API error:', response.status, body);
-    return defaultMetadata(content);
+    return defaultMetadata(content, source);
   }
 
   const data = await response.json();
+
+  if (!data?.choices?.[0]?.message?.content) {
+    console.error('Unexpected metadata API response:', JSON.stringify(data));
+    return defaultMetadata(content, source);
+  }
+
   try {
     const raw = JSON.parse(data.choices[0].message.content);
     return {
@@ -68,15 +87,15 @@ export async function extractMetadata(content: string): Promise<ThoughtMetadata>
       has_file: false,
       file_name: '',
       file_description: '',
-      source: '' as ThoughtMetadata['source'],
+      source,
     };
   } catch (e) {
     console.error('Failed to parse metadata response:', e);
-    return defaultMetadata(content);
+    return defaultMetadata(content, source);
   }
 }
 
-function defaultMetadata(content: string): ThoughtMetadata {
+function defaultMetadata(content: string, source: 'mcp' | 'teams' = 'mcp'): ThoughtMetadata {
   return {
     title: content.slice(0, 50),
     type: 'observation',
@@ -86,7 +105,7 @@ function defaultMetadata(content: string): ThoughtMetadata {
     has_file: false,
     file_name: '',
     file_description: '',
-    source: '' as ThoughtMetadata['source'],
+    source,
   };
 }
 

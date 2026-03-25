@@ -161,8 +161,6 @@ function createMcpServer(): McpServer {
         extractMetadata(content),
       ]);
 
-      metadata.source = 'mcp';
-
       const thought = await insertThought(content, embedding, metadata);
 
       const title = metadata.title || 'Untitled';
@@ -191,7 +189,10 @@ function createMcpServer(): McpServer {
         return { content: [{ type: 'text' as const, text: 'No matching open task found.' }] };
       }
 
-      await updateThoughtStatus(match.id, 'done');
+      const updated = await updateThoughtStatus(match.id, 'done');
+      if (!updated) {
+        return { content: [{ type: 'text' as const, text: 'Failed to update thought status.' }] };
+      }
       const title = match.metadata?.title || 'Untitled';
       const similarity = (match.similarity * 100).toFixed(1);
 
@@ -217,7 +218,10 @@ function createMcpServer(): McpServer {
         return { content: [{ type: 'text' as const, text: 'No matching completed task found.' }] };
       }
 
-      await updateThoughtStatus(match.id, 'open');
+      const updated = await updateThoughtStatus(match.id, 'open');
+      if (!updated) {
+        return { content: [{ type: 'text' as const, text: 'Failed to update thought status.' }] };
+      }
       const title = match.metadata?.title || 'Untitled';
       const similarity = (match.similarity * 100).toFixed(1);
 
@@ -246,7 +250,10 @@ function createMcpServer(): McpServer {
         return { content: [{ type: 'text' as const, text: 'No matching thought found.' }] };
       }
 
-      await updateThoughtStatus(match.id, 'deleted');
+      const updated = await updateThoughtStatus(match.id, 'deleted');
+      if (!updated) {
+        return { content: [{ type: 'text' as const, text: 'Failed to update thought status.' }] };
+      }
       const title = match.metadata?.title || 'Untitled';
       const similarity = (match.similarity * 100).toFixed(1);
 
@@ -261,6 +268,8 @@ function createMcpServer(): McpServer {
 
   return server;
 }
+
+const mcpServer = createMcpServer();
 
 async function handler(
   request: HttpRequest,
@@ -287,6 +296,19 @@ async function handler(
     try {
       const user = await validateGitHubToken(token);
       context.log(`MCP request authenticated as GitHub user: ${user.login}`);
+
+      // Check user allowlist
+      const allowedUsers = process.env.GITHUB_ALLOWED_USERS;
+      if (allowedUsers && allowedUsers.trim()) {
+        const allowList = allowedUsers.split(',').map(u => u.trim().toLowerCase());
+        if (!allowList.includes(user.login.toLowerCase())) {
+          return {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'unauthorized', message: 'User not authorized to access this MCP server' }),
+          };
+        }
+      }
     } catch (err) {
       return {
         status: 401,
@@ -296,13 +318,12 @@ async function handler(
     }
   }
 
-  const server = createMcpServer();
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
   });
 
-  await server.connect(transport);
+  await mcpServer.connect(transport);
 
   try {
     const init: RequestInit = {
@@ -336,7 +357,7 @@ async function handler(
       jsonBody: { error: 'Internal server error' },
     };
   } finally {
-    await server.close();
+    await mcpServer.close();
   }
 }
 

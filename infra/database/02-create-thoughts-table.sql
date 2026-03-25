@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS thoughts (
     content TEXT NOT NULL,
     embedding vector(1536),
     metadata JSONB DEFAULT '{}'::jsonb,
-    status TEXT DEFAULT 'open',
+    status TEXT DEFAULT 'open' CHECK (status IN ('open', 'done', 'deleted')),
     file_url TEXT,
     file_type TEXT,
     source_message_id TEXT,
