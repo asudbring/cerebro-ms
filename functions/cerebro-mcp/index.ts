@@ -269,8 +269,6 @@ function createMcpServer(): McpServer {
   return server;
 }
 
-const mcpServer = createMcpServer();
-
 async function handler(
   request: HttpRequest,
   context: InvocationContext
@@ -318,12 +316,13 @@ async function handler(
     }
   }
 
+  const server = createMcpServer();
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
   });
 
-  await mcpServer.connect(transport);
+  await server.connect(transport);
 
   try {
     const init: RequestInit = {
@@ -357,7 +356,7 @@ async function handler(
       jsonBody: { error: 'Internal server error' },
     };
   } finally {
-    await mcpServer.close();
+    await server.close();
   }
 }
 
