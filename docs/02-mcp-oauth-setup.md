@@ -266,14 +266,29 @@ Any MCP client that supports **OAuth 2.1 with PKCE** and **HTTP transport** will
 |----------|--------|---------|------|
 | `/.well-known/oauth-protected-resource` | GET | Resource metadata discovery | RFC 9728 |
 | `/.well-known/oauth-authorization-server` | GET | Auth server metadata discovery | RFC 8414 |
+| `/oauth/register` | POST | Dynamic Client Registration | RFC 7591 |
 | `/oauth/authorize` | GET | Initiates login, redirects to GitHub | OAuth 2.1 |
 | `/oauth/callback` | GET | Receives GitHub callback, redirects to client | OAuth 2.1 |
 | `/oauth/token` | POST | Exchanges authorization code for access token | OAuth 2.1 |
 
+### Dynamic Client Registration (RFC 7591)
+
+VS Code, opencode, and other compliant MCP clients automatically POST to `/oauth/register` before starting the OAuth flow. The server returns a `client_id` and `client_secret` that the client uses at the token endpoint.
+
+```bash
+# Example registration request (clients do this automatically)
+curl -s -X POST https://YOUR-FUNC.azurewebsites.net/oauth/register \
+  -H "Content-Type: application/json" \
+  -d '{"client_name": "my-mcp-client", "redirect_uris": ["http://localhost:3000/callback"]}' | jq .
+```
+
+The client registry is **in-memory** — clients re-register automatically on function cold start, which is transparent to the user.
+
 ### Token Lifecycle
 
-- **Access tokens** are GitHub OAuth tokens — they don't expire on a fixed schedule
-- **Validation** happens on every request by calling `https://api.github.com/user`
+- **Access tokens** are GitHub OAuth tokens — classic OAuth Apps issue non-expiring tokens; GitHub Apps issue expiring tokens with a `refresh_token`
+- **Validation** happens at most once every 5 minutes per token (cached per function instance)
+- **Cache** is in-memory and per-process — a cold start triggers one re-validation, then caches again
 - **Revocation** — revoke the token on GitHub (Settings → Applications → Authorized OAuth Apps)
 
 ---
@@ -305,9 +320,9 @@ GITHUB_ALLOWED_USERS="user1,user2,user3"
 
 ### ❌ "Dynamic Client Registration not supported"
 
-This is **expected behavior**. MCP clients may show this message during the initial connection.
+This message is **outdated** — DCR is now fully supported. If you see it, your client may be using a cached version of the AS metadata.
 
-**Fix:** Click **"Copy URIs & Proceed"** (or equivalent) in your MCP client. The OAuth flow will continue normally.
+**Fix:** Clear your MCP client's cached server configuration and reconnect. The client will re-discover the `registration_endpoint` and auto-register.
 
 ### ⏳ "Waiting for server to respond to initialize"
 

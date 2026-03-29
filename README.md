@@ -88,7 +88,7 @@ When you connect, your browser opens for GitHub login — **no API keys needed**
 | **Claude Code** | `claude mcp add cerebro --transport http https://your-func.azurewebsites.net/cerebro-mcp` |
 | **Other MCP clients** | Use the HTTP URL directly; OAuth discovery is automatic |
 
-OAuth uses **RFC 9728 + RFC 8414** discovery with PKCE support. The `host.json` route prefix is set to empty string so `.well-known` routes resolve at the root.
+OAuth uses **RFC 9728 + RFC 8414** discovery, **RFC 7591** Dynamic Client Registration, and PKCE support. The `host.json` route prefix is set to empty string so `.well-known` routes resolve at the root. VS Code, opencode, Claude Code, and any other RFC 7591-compliant MCP client will auto-register and connect without manual configuration.
 
 ---
 
@@ -131,7 +131,7 @@ Both also have manual HTTP triggers for on-demand generation.
 
 | Surface | Method |
 |---------|--------|
-| **MCP endpoint** | GitHub OAuth 2.1 — browser login, PKCE, token refresh |
+| **MCP endpoint** | GitHub OAuth 2.1 — browser login, PKCE, DCR (RFC 7591), token refresh |
 | **Teams bot** | Bot Framework JWT validation via Entra ID |
 | **Digest HTTP triggers** | Azure Functions host key (function-level auth) |
 
@@ -253,6 +253,8 @@ See [`.env.example`](.env.example) for the full list. Key groups:
 - **Loop guard** prevents the bot from re-processing its own replies
 - **Digest truncation** at ~24KB for Teams message limits; full content in email HTML
 - **SQL migrations are idempotent** (`IF NOT EXISTS` / `CREATE OR REPLACE`)
+- **Token validation is cached** for 5 minutes per token per function instance — GitHub API is not called on every MCP request
+- **Dynamic Client Registration** (RFC 7591) is supported at `/oauth/register` — VS Code, opencode, and other compliant clients auto-register
 
 ---
 

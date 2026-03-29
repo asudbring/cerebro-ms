@@ -1,5 +1,5 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
-import { createHash, createHmac } from 'crypto';
+import { createHash, createHmac, randomBytes } from 'crypto';
 import {
   getOAuthConfig,
   getBaseUrl,
@@ -30,6 +30,20 @@ function verifySignedPayload(signed: string): any {
   if (signature !== expectedSignature) throw new Error('Invalid signature');
   return JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
 }
+
+// --- Dynamic Client Registration (RFC 7591) ---
+// In-memory registry — survives the lifetime of a warm function instance.
+// Clients re-register on cold start, which is fine for this use case.
+
+interface RegisteredClient {
+  client_id: string;
+  client_secret: string;
+  redirect_uris: string[];
+  client_name?: string;
+  created_at: number;
+}
+
+const clientRegistry = new Map<string, RegisteredClient>();
 
 // --- Protected Resource Metadata (RFC 9728) ---
 // MCP clients discover auth requirements via this endpoint
@@ -82,6 +96,62 @@ app.http('oauth-authorization-server-metadata', {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(getAuthorizationServerMetadata()),
+    };
+  },
+});
+
+// --- Dynamic Client Registration (RFC 7591) ---
+// VS Code, opencode, and other compliant MCP clients POST here to register
+// themselves before starting the OAuth flow.
+
+app.http('oauth-register', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'oauth/register',
+  handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+    if (!isOAuthConfigured()) {
+      return { status: 503, body: 'OAuth not configured' };
+    }
+
+    let body: any = {};
+    try {
+      const text = await request.text();
+      if (text) body = JSON.parse(text);
+    } catch {
+      return {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'invalid_client_metadata', error_description: 'Invalid JSON body' }),
+      };
+    }
+
+    const clientId = randomBytes(16).toString('hex');
+    const clientSecret = randomBytes(32).toString('hex');
+    const redirectUris: string[] = Array.isArray(body.redirect_uris) ? body.redirect_uris : [];
+
+    clientRegistry.set(clientId, {
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uris: redirectUris,
+      client_name: body.client_name,
+      created_at: Date.now(),
+    });
+
+    context.log(`DCR: registered client ${clientId} (${body.client_name || 'unnamed'}) with ${redirectUris.length} redirect URIs`);
+
+    return {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        client_secret_expires_at: 0, // never expires
+        redirect_uris: redirectUris,
+        grant_types: ['authorization_code'],
+        response_types: ['code'],
+        token_endpoint_auth_method: 'client_secret_post',
+        ...(body.client_name && { client_name: body.client_name }),
+      }),
     };
   },
 });
@@ -208,6 +278,8 @@ app.http('oauth-token', {
 
       const grantType = params.get('grant_type');
       const code = params.get('code');
+      const clientId = params.get('client_id');
+      const clientSecret = params.get('client_secret');
 
       if (grantType !== 'authorization_code') {
         return {
@@ -223,6 +295,28 @@ app.http('oauth-token', {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ error: 'invalid_request', error_description: 'Missing code parameter' }),
         };
+      }
+
+      // Validate DCR client credentials if provided.
+      // Clients registered via /oauth/register must present matching credentials.
+      // Clients that didn't register (e.g. manual setups) are allowed through
+      // since the GitHub token itself is the real security boundary.
+      if (clientId) {
+        const registered = clientRegistry.get(clientId);
+        if (!registered) {
+          return {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'invalid_client', error_description: 'Unknown client_id' }),
+          };
+        }
+        if (clientSecret && registered.client_secret !== clientSecret) {
+          return {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'invalid_client', error_description: 'Invalid client_secret' }),
+          };
+        }
       }
 
       // Decode the wrapped authorization code (contains GitHub code + PKCE challenge)
@@ -271,18 +365,28 @@ app.http('oauth-token', {
       // Exchange the code with GitHub
       const tokenResponse = await exchangeCodeForToken(githubCode);
 
-      // Return the token to the MCP client
+      // Return the token to the MCP client, forwarding any expiry/refresh
+      // fields GitHub provided (GitHub Apps return expires_in + refresh_token;
+      // classic OAuth Apps return neither, which is also fine).
+      const responseBody: Record<string, any> = {
+        access_token: tokenResponse.access_token,
+        token_type: tokenResponse.token_type,
+        scope: tokenResponse.scope,
+      };
+      if (tokenResponse.expires_in !== undefined) {
+        responseBody.expires_in = tokenResponse.expires_in;
+      }
+      if (tokenResponse.refresh_token) {
+        responseBody.refresh_token = tokenResponse.refresh_token;
+      }
+
       return {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store',
         },
-        body: JSON.stringify({
-          access_token: tokenResponse.access_token,
-          token_type: tokenResponse.token_type,
-          scope: tokenResponse.scope,
-        }),
+        body: JSON.stringify(responseBody),
       };
     } catch (err: any) {
       context.error('OAuth token exchange error:', err);

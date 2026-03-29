@@ -4,6 +4,11 @@ const GITHUB_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
 const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 const GITHUB_USER_API = 'https://api.github.com/user';
 
+// In-memory token validation cache — avoids hitting GitHub API on every request.
+// Cache is per-process (lost on cold start), TTL of 5 minutes.
+const TOKEN_CACHE_TTL_MS = 5 * 60 * 1000;
+const tokenCache = new Map<string, { user: GitHubUser; expiresAt: number }>();
+
 export interface GitHubUser {
   login: string;
   id: number;
@@ -40,7 +45,7 @@ export function getBaseUrl(): string {
 /**
  * Exchange an authorization code for a GitHub access token.
  */
-export async function exchangeCodeForToken(code: string): Promise<{ access_token: string; token_type: string; scope: string }> {
+export async function exchangeCodeForToken(code: string): Promise<{ access_token: string; token_type: string; scope: string; expires_in?: number; refresh_token?: string }> {
   const { clientId, clientSecret } = getOAuthConfig();
 
   const response = await fetch(GITHUB_TOKEN_URL, {
@@ -69,14 +74,22 @@ export async function exchangeCodeForToken(code: string): Promise<{ access_token
     access_token: data.access_token,
     token_type: data.token_type || 'bearer',
     scope: data.scope || '',
+    ...(data.expires_in !== undefined && { expires_in: data.expires_in }),
+    ...(data.refresh_token && { refresh_token: data.refresh_token }),
   };
 }
 
 /**
  * Validate a GitHub access token by calling the GitHub User API.
- * Returns the user info if valid, throws if invalid.
+ * Results are cached for TOKEN_CACHE_TTL_MS to avoid hitting GitHub on every request.
+ * Cache is per-process and lost on cold start, which is acceptable.
  */
 export async function validateGitHubToken(token: string): Promise<GitHubUser> {
+  const cached = tokenCache.get(token);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.user;
+  }
+
   const response = await fetch(GITHUB_USER_API, {
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -86,10 +99,12 @@ export async function validateGitHubToken(token: string): Promise<GitHubUser> {
   });
 
   if (!response.ok) {
+    tokenCache.delete(token);
     throw new Error(`GitHub token validation failed: ${response.status}`);
   }
 
   const user = await response.json() as GitHubUser;
+  tokenCache.set(token, { user, expiresAt: Date.now() + TOKEN_CACHE_TTL_MS });
   return user;
 }
 
@@ -117,6 +132,8 @@ export function getProtectedResourceMetadata(): object {
 
 /**
  * Get the Authorization Server Metadata (RFC 8414) wrapping GitHub OAuth.
+ * Advertises Dynamic Client Registration (RFC 7591) support so VS Code,
+ * opencode, and other compliant MCP clients can register automatically.
  */
 export function getAuthorizationServerMetadata(): object {
   const baseUrl = getBaseUrl();
@@ -124,9 +141,11 @@ export function getAuthorizationServerMetadata(): object {
     issuer: baseUrl,
     authorization_endpoint: `${baseUrl}/oauth/authorize`,
     token_endpoint: `${baseUrl}/oauth/token`,
+    registration_endpoint: `${baseUrl}/oauth/register`,
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code'],
     code_challenge_methods_supported: ['S256'],
+    token_endpoint_auth_methods_supported: ['client_secret_post', 'none'],
     scopes_supported: ['read', 'write'],
   };
 }
