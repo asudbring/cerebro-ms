@@ -1,19 +1,4 @@
----
-applyTo: "**"
----
-
-# Copilot Custom Instructions — Content Developer Profile
-
-## Copilot customization system
-
-This project uses GitHub's Copilot customization features:
-
-- **`copilot-instructions.md`** — Always-on, repo-wide context (this file)
-- **`instructions/*.instructions.md`** — Path-scoped rules auto-applied by file type (`*.md` → markdown authoring + SFI security; `*.yml` → YAML metadata)
-- **`agents/*.agent.md`** — Custom agents selectable from the agent dropdown
-- **`skills/*/SKILL.md`** — Skills auto-loaded when relevant; each skill has a `SKILL.md` entry point and optional `references/` subdirectory
-- **`prompts/*.prompt.md`** — Reusable prompt templates available from the prompt picker
-- **`.vscode/mcp.json`** — MCP server configuration
+# Claude Code — Content Developer Profile
 
 ## Identity
 
@@ -53,35 +38,6 @@ Articles follow learn.microsoft.com frontmatter standards (`ms.service`, `ms.top
 - **Context7** — library and SDK documentation lookups
 - **Cerebro** — personal knowledge retrieval
 
-## Context Mode & AI-Optimized Tools
-
-All agents and skills should use **context-mode** for reading large files and **AI-optimized CLI tools** for search and file operations.
-
-### context-mode MCP tools
-
-| Tool | Purpose |
-|---|---|
-| `ctx_execute_file` | Process a file in sandbox — only your `print()` output enters context |
-| `ctx_index` | Index a file or directory for BM25 full-text search |
-| `ctx_search` | Search indexed content with natural language queries |
-| `ctx_batch_execute` | Run multiple commands + queries in one call |
-| `ctx_execute` | Run shell commands in sandbox without flooding context |
-| `ctx_fetch_and_index` | Fetch a URL and index it for search |
-
-### AI-Optimized CLI Tools
-
-| Tool | Command | Use instead of |
-|---|---|---|
-| ripgrep | `rg` | `grep` |
-| fd | `fd` | `find` |
-| fzf | `fzf` | Manual list scanning |
-| DuckDB | `duckdb` | CSV/JSON data queries |
-| git-delta | `delta` | Raw `git diff` |
-| xh | `xh` | `curl` |
-| watchexec | `watchexec` | Manual polling |
-| just | `just` | Shell scripts |
-| semgrep | `semgrep` | Manual pattern review |
-
 ## CLI Tools Available on All Workstations
 
 ### Core Development Tools
@@ -106,11 +62,31 @@ All agents and skills should use **context-mode** for reading large files and **
 | GitHub CLI | `gh` | GitHub operations (PRs, issues, repos) |
 | GitHub Copilot CLI | `gh copilot` | AI-assisted CLI commands |
 
+### AI-Optimized Dev Tools
+
+| Tool | Command | Purpose |
+|---|---|---|
+| ripgrep | `rg` | Fast grep that respects .gitignore |
+| fd | `fd` | Modern `find` replacement |
+| fzf | `fzf` | Interactive fuzzy finder |
+| DuckDB | `duckdb` | SQL on CSV/Parquet/JSON files |
+| git-delta | `delta` | Better git diff output |
+| xh | `xh` | Structured HTTP client output |
+| watchexec | `watchexec` | Auto-rerun commands on file changes |
+| just | `just` | Simple task runner |
+| semgrep | `semgrep` | Static code analysis |
+
 ### NPM Global Packages
 
 | Tool | Command | Purpose |
 |---|---|---|
 | context-mode | `ctx` | Codebase context indexing and search |
+
+### OS-Specific Tools
+
+- **Windows**: `winget`, `choco` (Chocolatey), Windows Terminal, WSL with Ubuntu
+- **macOS**: `brew` (Homebrew), oh-my-zsh
+- **Linux**: Terminator, oh-my-bash, KVM/QEMU (virt-manager), FreeRDP, Flameshot
 
 ## Code and Commands
 
@@ -124,9 +100,6 @@ All agents and skills should use **context-mode** for reading large files and **
   - Subscription: `00000000-0000-0000-0000-000000000000`
   - Public IPs: `203.0.113.x` (documentation range)
   - Private IPs: `10.0.0.x` or `192.168.0.x`
-- When the phrase "push it" is used: stage all changes, commit with a detailed message, run `git pull upstream main --no-edit`, then push to fork.
-    - First push to a branch → create a detailed PR using the GitHub MCP tools and the `content-developer` agent (with AB# work item linking)
-    - Subsequent pushes → just push to the existing fork branch, no new PR
 
 ## Quality Standards
 
